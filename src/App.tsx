@@ -1,0 +1,1027 @@
+/**
+ * @license
+ * SPDX-License-Identifier: Apache-2.0
+ */
+
+import React, { useState, useEffect } from 'react';
+import { motion, AnimatePresence } from 'motion/react';
+import { 
+  ArrowUp,
+  ArrowDown,
+  TrendingUp, 
+  TrendingDown, 
+  Minus, 
+  RefreshCw, 
+  ExternalLink, 
+  AlertCircle,
+  ChevronRight,
+  Globe,
+  Clock,
+  Plus,
+  FileText,
+  BrainCircuit,
+  Maximize2,
+  Minimize2,
+  X,
+  Trash2
+} from 'lucide-react';
+import { analyzeMarket, PairAnalysis } from './services/geminiService';
+import { fetchRealTimePrice, fetchNewsHeadlines, PriceData, NewsHeadline } from './services/marketDataService';
+import { clsx, type ClassValue } from 'clsx';
+import { twMerge } from 'tailwind-merge';
+
+function cn(...inputs: ClassValue[]) {
+  return twMerge(clsx(inputs));
+}
+
+const INITIAL_PAIRS = [
+  'EUR/USD',
+  'USD/JPY',
+  'XAU/USD',
+  'GBP/USD',
+  'EUR/JPY',
+  'EUR/GBP',
+  'US100',
+  'US30'
+];
+
+const TypingHeader = ({ text }: { text: string }) => {
+  const capitalizedText = text.charAt(0).toUpperCase() + text.slice(1);
+  const [displayedText, setDisplayedText] = useState('');
+  const [isComplete, setIsComplete] = useState(false);
+  
+  useEffect(() => {
+    let i = 0;
+    const timer = setInterval(() => {
+      setDisplayedText(capitalizedText.slice(0, i + 1));
+      i++;
+      if (i >= capitalizedText.length) {
+        clearInterval(timer);
+        setIsComplete(true);
+      }
+    }, 100);
+    return () => clearInterval(timer);
+  }, [capitalizedText]);
+
+  return (
+    <h2 className="text-3xl font-bold tracking-tight mb-2 min-h-[40px]">
+      {displayedText}
+      {!isComplete && (
+        <motion.span
+          animate={{ opacity: [0, 1, 0] }}
+          transition={{ repeat: Infinity, duration: 0.8 }}
+          className="inline-block w-1 h-8 bg-[#2383e2] ml-1 align-middle"
+        />
+      )}
+    </h2>
+  );
+};
+
+interface MarketCardProps {
+  analysis: PairAnalysis | null;
+  pair: string;
+  onRefresh: () => void;
+  onRemove?: () => void;
+  onDetails?: (analysis: PairAnalysis) => void;
+  onInsights?: (analysis: PairAnalysis) => void;
+  isLoading: boolean;
+  retryStatus?: { attempt: number, delay: number } | null;
+}
+
+const PriceMarquee = () => {
+  const [prices, setPrices] = useState<PriceData[]>([
+    { symbol: 'EUR/USD', price: '1.0842', change: '0.00', changePercent: '+0.12%' },
+    { symbol: 'USD/JPY', price: '149.52', change: '0.00', changePercent: '-0.05%' },
+    { symbol: 'GBP/USD', price: '1.2654', change: '0.00', changePercent: '+0.08%' },
+    { symbol: 'XAU/USD', price: '2034.15', change: '0.00', changePercent: '+0.45%' },
+    { symbol: 'AAPL', price: '182.31', change: '0.00', changePercent: '-1.20%' },
+    { symbol: 'TSLA', price: '193.57', change: '0.00', changePercent: '+2.15%' },
+    { symbol: 'NVDA', price: '726.13', change: '0.00', changePercent: '+4.50%' },
+    { symbol: 'BTC/USD', price: '51234.50', change: '0.00', changePercent: '+1.10%' }
+  ]);
+  const marqueePairs = ['EUR/USD', 'USD/JPY', 'GBP/USD', 'XAU/USD', 'AAPL', 'TSLA', 'NVDA', 'BTC/USD'];
+
+  useEffect(() => {
+    const fetchPrices = async () => {
+      const results: PriceData[] = [];
+      // Stagger requests to avoid Alpha Vantage rate limits (5 calls per minute)
+      for (const pair of marqueePairs) {
+        const result = await fetchRealTimePrice(pair);
+        if (result) {
+          results.push(result);
+        }
+        // Wait 12 seconds between each request to stay within 5 calls/min limit
+        await new Promise(resolve => setTimeout(resolve, 12000));
+      }
+      
+      if (results.length > 0) {
+        setPrices(prev => {
+          // Merge new results with existing ones, prioritizing new ones
+          const newPrices = [...prev];
+          results.forEach(res => {
+            const index = newPrices.findIndex(p => p.symbol === res.symbol);
+            if (index !== -1) {
+              newPrices[index] = res;
+            } else {
+              newPrices.push(res);
+            }
+          });
+          return newPrices;
+        });
+      }
+    };
+
+    fetchPrices();
+    const interval = setInterval(fetchPrices, 300000); // Update every 5 minutes to stay safe
+    return () => clearInterval(interval);
+  }, []);
+
+  return (
+    <div className="bg-[#f7f6f3] py-4 overflow-hidden whitespace-nowrap border-b border-[#f1f1ef]">
+      <motion.div 
+        animate={{ x: ["0%", "-50%"] }}
+        transition={{ duration: 40, repeat: Infinity, ease: "linear" }}
+        className="flex w-fit"
+      >
+        <div className="flex gap-6 px-3">
+          {[...prices, ...prices, ...prices, ...prices].map((price, i) => (
+            <div key={i} className="flex items-center gap-3 border border-black rounded-xl px-4 py-2 bg-white shadow-sm shrink-0">
+              <span className="text-[10px] font-bold tracking-widest uppercase text-[#787774]">{price.symbol}</span>
+              <span className="text-xs font-mono font-bold text-[#37352f]">{price.price}</span>
+              <span className={cn(
+                "text-[10px] font-bold px-1.5 py-0.5 rounded",
+                price.changePercent.startsWith('-') ? "bg-[#ffebe6] text-[#de350b]" : "bg-[#e3fcef] text-[#00875a]"
+              )}>
+                {price.changePercent}
+              </span>
+            </div>
+          ))}
+        </div>
+      </motion.div>
+    </div>
+  );
+};
+
+const MarketCard = ({ analysis, pair, onRefresh, onRemove, onDetails, onInsights, isLoading, retryStatus, featured = false }: MarketCardProps & { featured?: boolean }) => {
+  const [isMinimized, setIsMinimized] = useState(true);
+  const [isExpanded, setIsExpanded] = useState(false);
+  const [showConfirmDelete, setShowConfirmDelete] = useState(false);
+  const getBiasColor = (bias: string) => {
+    switch (bias) {
+      case 'bullish': return 'text-[#00875a] bg-[#e3fcef] border-[#00875a]/20';
+      case 'bearish': return 'text-[#de350b] bg-[#ffebe6] border-[#de350b]/20';
+      default: return 'text-[#37352f] bg-[#f1f1ef] border-[#37352f]/20';
+    }
+  };
+
+  return (
+    <motion.div 
+      layout
+      transition={{ 
+        layout: { type: "spring", stiffness: 160, damping: 22 },
+        opacity: { duration: 0.2 }
+      }}
+      initial={{ opacity: 0, y: 10 }}
+      animate={{ opacity: 1, y: 0 }}
+      onClick={() => isMinimized && setIsMinimized(false)}
+      className={cn(
+        "notion-card relative flex flex-col gap-4 group cursor-pointer overflow-hidden",
+        isMinimized ? "p-4 h-auto" : "p-6 h-full",
+        !isMinimized && "shadow-xl border-[#2383e2]/20 ring-1 ring-[#2383e2]/5",
+        !isMinimized && "bento-featured"
+      )}
+    >
+      <motion.div layout className="flex justify-between items-start">
+        <motion.div layout className="flex items-center gap-3">
+          <motion.div layout className="w-8 h-8 rounded flex items-center justify-center bg-[#f1f1ef]">
+            <Globe className="w-4 h-4 text-[#37352f]" />
+          </motion.div>
+          <motion.div layout>
+            <motion.h3 layout className={cn("font-bold tracking-tight text-[#37352f]", isMinimized ? "text-sm" : "text-base")}>{pair}</motion.h3>
+            {!isMinimized && (
+              <motion.div 
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                className="flex items-center gap-2 mt-0.5"
+              >
+                {analysis && (
+                  <span className={cn("text-[10px] font-bold uppercase px-1.5 py-0.5 rounded border tracking-wider", getBiasColor(analysis.bias))}>
+                    {analysis.bias}
+                  </span>
+                )}
+              </motion.div>
+            )}
+          </motion.div>
+        </motion.div>
+        <motion.div layout className="flex items-center gap-2">
+          {/* macOS Style Buttons */}
+          {onRemove && (
+            <button 
+              onClick={(e) => { e.stopPropagation(); setShowConfirmDelete(true); }} 
+              className={cn(
+                "w-3.5 h-3.5 rounded-full bg-[#ff5f56] hover:bg-[#ff5f56]/80 transition-all shadow-sm flex items-center justify-center group/btn",
+                isMinimized ? "opacity-0 group-hover:opacity-100" : "opacity-100"
+              )}
+              title="Remove"
+            >
+              <Trash2 className="w-2 h-2 text-[#4c0000]" />
+            </button>
+          )}
+          
+          {!isMinimized && (
+            <button 
+              onClick={(e) => { e.stopPropagation(); setIsMinimized(true); }}
+              className="w-3.5 h-3.5 rounded-full bg-[#e1e1e1] hover:bg-[#d4d4d4] transition-all shadow-sm flex items-center justify-center group/btn"
+              title="Minimize"
+            >
+              <Minimize2 className="w-2 h-2 text-[#5f5f5f]" />
+            </button>
+          )}
+        </motion.div>
+      </motion.div>
+
+      {isLoading ? (
+        <motion.div layout className={cn("flex flex-col items-center justify-center gap-3", isMinimized ? "py-4" : "py-12 flex-1")}>
+          <BrainCircuit className="w-6 h-6 text-[#2383e2] animate-pulse" />
+          {!isMinimized && (
+            <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="flex flex-col items-center gap-1">
+              <span className="text-[10px] font-mono text-[#787774] uppercase tracking-widest">Synthesizing...</span>
+              {retryStatus && (
+                <span className="text-[8px] font-mono text-[#de350b] uppercase tracking-tighter animate-pulse">
+                  Rate Limit Hit: Retrying ({retryStatus.attempt}/5)
+                </span>
+              )}
+            </motion.div>
+          )}
+        </motion.div>
+      ) : analysis ? (
+        <>
+          <motion.div layout className="flex gap-3 items-stretch">
+            {!isMinimized && (
+              <motion.div 
+                initial={{ opacity: 0, x: -10 }}
+                animate={{ opacity: 1, x: 0 }}
+                className="w-1 bg-[#f1f1ef] rounded-full overflow-hidden flex flex-col justify-end"
+              >
+                <motion.div 
+                  initial={{ height: 0 }}
+                  animate={{ height: `${analysis.confidence}%` }}
+                  className={cn(
+                    "w-full rounded-full transition-all duration-1000",
+                    analysis.bias === 'bullish' ? "bg-[#00875a]" : 
+                    analysis.bias === 'bearish' ? "bg-[#de350b]" : "bg-[#37352f]"
+                  )}
+                />
+              </motion.div>
+            )}
+            <motion.div layout className="flex-1 flex gap-2">
+              {(() => {
+                const parts = pair.split('/');
+                const base = parts[0];
+                const quote = parts[1];
+                const isBullish = analysis.bias === 'bullish';
+                const isBearish = analysis.bias === 'bearish';
+                
+                return (
+                  <>
+                    <motion.div layout className={cn(
+                      "flex-1 border border-black rounded-xl flex items-center justify-center gap-2 bg-white shadow-sm transition-all",
+                      isMinimized ? "p-2" : "p-3"
+                    )}>
+                      <motion.span layout className="text-[10px] font-bold text-[#787774] uppercase tracking-wider">{base}</motion.span>
+                      <motion.div layout>
+                        {isBullish ? (
+                          <ArrowUp className="w-4 h-4 text-[#00875a]" />
+                        ) : isBearish ? (
+                          <ArrowDown className="w-4 h-4 text-[#de350b]" />
+                        ) : (
+                          <Minus className="w-4 h-4 text-[#787774]" />
+                        )}
+                      </motion.div>
+                    </motion.div>
+                    {quote && (
+                      <motion.div layout className={cn(
+                        "flex-1 border border-black rounded-xl flex items-center justify-center gap-2 bg-white shadow-sm transition-all",
+                        isMinimized ? "p-2" : "p-3"
+                      )}>
+                        <motion.span layout className="text-[10px] font-bold text-[#787774] uppercase tracking-wider">{quote}</motion.span>
+                        <motion.div layout>
+                          {isBullish ? (
+                            <ArrowDown className="w-4 h-4 text-[#de350b]" />
+                          ) : isBearish ? (
+                            <ArrowUp className="w-4 h-4 text-[#00875a]" />
+                          ) : (
+                            <Minus className="w-4 h-4 text-[#787774]" />
+                          )}
+                        </motion.div>
+                      </motion.div>
+                    )}
+                  </>
+                );
+              })()}
+            </motion.div>
+          </motion.div>
+
+          <AnimatePresence>
+            {!isMinimized && (
+              <motion.div
+                initial={{ opacity: 0, height: 0 }}
+                animate={{ opacity: 1, height: 'auto' }}
+                exit={{ opacity: 0, height: 0 }}
+                transition={{ duration: 0.3, ease: "easeInOut" }}
+                className="flex flex-col gap-4 flex-1 overflow-hidden"
+              >
+                <div className="flex items-center justify-between text-[10px] font-mono">
+                  <div className="flex items-center gap-2">
+                    <span className={cn(
+                      "px-1.5 py-0.5 rounded",
+                      analysis.change.startsWith('+') ? "text-[#00875a] bg-[#e3fcef]" : "text-[#de350b] bg-[#ffebe6]"
+                    )}>
+                      {analysis.change}
+                    </span>
+                    <span className="text-[#787774]">Updated {analysis.lastUpdate}</span>
+                  </div>
+                </div>
+
+                <div className="flex flex-col gap-2">
+                  <button 
+                    onClick={(e) => { e.stopPropagation(); setIsExpanded(!isExpanded); }}
+                    className="flex items-center justify-between w-full text-[10px] font-bold text-[#787774] uppercase tracking-wider border-b border-[#f1f1ef] pb-1.5 group/header"
+                  >
+                    <span>Key Drivers</span>
+                    <ChevronRight className={cn("w-3 h-3 transition-transform duration-300", isExpanded && "rotate-90")} />
+                  </button>
+                  <AnimatePresence initial={false}>
+                    {isExpanded && (
+                      <motion.ul 
+                        initial={{ height: 0, opacity: 0 }}
+                        animate={{ height: 'auto', opacity: 1 }}
+                        exit={{ height: 0, opacity: 0 }}
+                        className="space-y-2 overflow-hidden pt-1"
+                      >
+                        {analysis.keyFactors.map((factor, i) => (
+                          <li key={i} className="flex items-start gap-2.5 text-[12px] text-[#37352f] leading-snug">
+                            <div className="mt-1.5 w-1 h-1 rounded-full bg-[#37352f]/20 shrink-0" />
+                            <span className="line-clamp-2">{factor}</span>
+                          </li>
+                        ))}
+                      </motion.ul>
+                    )}
+                  </AnimatePresence>
+                </div>
+
+                <div className="mt-auto pt-4 flex gap-2 relative">
+                  <button 
+                    onClick={(e) => { e.stopPropagation(); analysis && onDetails?.(analysis); }}
+                    className="flex-1 py-1.5 rounded bg-[#f1f1ef] hover:bg-[#e8e8e6] text-[10px] font-bold uppercase tracking-wider transition-colors text-[#37352f]"
+                  >
+                    Details
+                  </button>
+                  <button 
+                    onClick={(e) => { e.stopPropagation(); analysis && onInsights?.(analysis); }}
+                    className="flex-1 py-1.5 rounded bg-[#2383e2]/10 hover:bg-[#2383e2]/20 text-[#2383e2] text-[10px] font-bold uppercase tracking-wider transition-colors"
+                  >
+                    Insights
+                  </button>
+                </div>
+
+                {/* Inline Confirmation */}
+                <AnimatePresence>
+                  {showConfirmDelete && (
+                    <motion.div 
+                      initial={{ opacity: 0, scale: 0.95 }}
+                      animate={{ opacity: 1, scale: 1 }}
+                      exit={{ opacity: 0, scale: 0.95 }}
+                      className="absolute inset-0 z-30 bg-white/95 backdrop-blur-sm flex flex-col items-center justify-center p-6 text-center rounded-xl border border-black shadow-2xl"
+                      onClick={(e) => e.stopPropagation()}
+                    >
+                      <div className="w-12 h-12 rounded-full bg-[#ffebe6] flex items-center justify-center mb-4">
+                        <Trash2 className="w-6 h-6 text-[#de350b]" />
+                      </div>
+                      <h4 className="text-base font-bold text-[#37352f] mb-1">Remove {pair}?</h4>
+                      <p className="text-[10px] text-[#787774] mb-6 uppercase tracking-widest font-bold">This action cannot be undone.</p>
+                      <div className="flex gap-3 w-full max-w-[200px]">
+                        <button 
+                          onClick={() => setShowConfirmDelete(false)}
+                          className="flex-1 py-2.5 rounded-xl bg-white border border-black text-black text-[11px] font-bold uppercase tracking-wider transition-all hover:bg-[#f7f6f3]"
+                        >
+                          No
+                        </button>
+                        <button 
+                          onClick={() => { onRemove?.(); setShowConfirmDelete(false); }}
+                          className="flex-1 py-2.5 rounded-xl bg-black text-white text-[11px] font-bold uppercase tracking-wider transition-all hover:bg-[#37352f]"
+                        >
+                          Yes
+                        </button>
+                      </div>
+                    </motion.div>
+                  )}
+                </AnimatePresence>
+              </motion.div>
+            )}
+          </AnimatePresence>
+        </>
+      ) : (
+        <div className={cn("flex items-center justify-center", isMinimized ? "py-2" : "py-12 flex-1")}>
+          <button 
+            onClick={(e) => { e.stopPropagation(); onRefresh(); }}
+            className="text-[10px] font-bold text-[#787774] hover:text-[#37352f] transition-all uppercase border border-[#f1f1ef] px-4 py-2 rounded hover:bg-[#f1f1ef]"
+          >
+            Initialize
+          </button>
+        </div>
+      )}
+    </motion.div>
+  );
+};
+
+const DetailsModal = ({ analysis, onClose }: { analysis: PairAnalysis, onClose: () => void }) => {
+  const [newsHeadlines, setNewsHeadlines] = useState<NewsHeadline[]>([]);
+  const [loadingNews, setLoadingNews] = useState(false);
+
+  useEffect(() => {
+    const loadNews = async () => {
+      setLoadingNews(true);
+      const headlines = await fetchNewsHeadlines(analysis.pair);
+      setNewsHeadlines(headlines);
+      setLoadingNews(false);
+    };
+    // Disable automatic news fetching to save API requests
+    // loadNews();
+  }, [analysis.pair]);
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+      <motion.div 
+        initial={{ opacity: 0 }}
+        animate={{ opacity: 1 }}
+        exit={{ opacity: 0 }}
+        onClick={onClose}
+        className="absolute inset-0 bg-black/40 backdrop-blur-[2px]"
+      />
+      <motion.div 
+        initial={{ opacity: 0, scale: 0.98, y: 10 }}
+        animate={{ opacity: 1, scale: 1, y: 0 }}
+        exit={{ opacity: 0, scale: 0.98, y: 10 }}
+        className="relative w-full max-w-3xl bg-white border border-[#f1f1ef] rounded-lg overflow-hidden shadow-2xl flex flex-col max-h-[90vh]"
+      >
+        <div className="p-6 border-b border-[#f1f1ef] flex justify-between items-center bg-[#f7f6f3]">
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 rounded bg-[#37352f] flex items-center justify-center">
+              <Globe className="w-5 h-5 text-white" />
+            </div>
+            <div>
+              <h2 className="text-xl font-bold text-[#37352f]">{analysis.pair} Deep Analysis</h2>
+              <p className="text-[10px] font-mono text-[#787774] uppercase tracking-widest">Institutional Intelligence Report</p>
+            </div>
+          </div>
+          <button onClick={onClose} className="p-2 hover:bg-[#f1f1ef] rounded-full transition-colors">
+            <X className="w-6 h-6 text-[#787774]" />
+          </button>
+        </div>
+
+        <div className="flex-1 overflow-y-auto p-8 custom-scrollbar">
+          <div className="space-y-10">
+            {/* Full Confidence Bar Section */}
+            <div className="space-y-4">
+              <div className="flex justify-between items-end">
+                <div className="space-y-1">
+                  <h4 className="text-[10px] font-bold text-[#787774] uppercase tracking-widest">AI Confidence Score</h4>
+                  <div className="text-3xl font-bold text-[#37352f]">{analysis.confidence}%</div>
+                </div>
+                <div className={cn(
+                  "px-4 py-1.5 rounded-full text-xs font-bold uppercase tracking-widest border mb-1",
+                  analysis.bias === 'bullish' ? "text-[#00875a] bg-[#e3fcef] border-[#00875a]/20" : 
+                  analysis.bias === 'bearish' ? "text-[#de350b] bg-[#ffebe6] border-[#de350b]/20" : 
+                  "text-[#37352f] bg-[#f1f1ef] border-[#37352f]/20"
+                )}>
+                  {analysis.bias} Bias
+                </div>
+              </div>
+              <div className="h-4 w-full bg-[#f1f1ef] rounded-full overflow-hidden">
+                <motion.div 
+                  initial={{ width: 0 }}
+                  animate={{ width: `${analysis.confidence}%` }}
+                  transition={{ duration: 1, ease: "easeOut" }}
+                  className={cn(
+                    "h-full rounded-full transition-all",
+                    analysis.bias === 'bullish' ? "bg-[#00875a]" : 
+                    analysis.bias === 'bearish' ? "bg-[#de350b]" : "bg-[#37352f]"
+                  )}
+                />
+              </div>
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-10">
+              {/* Left Column: Key Drivers */}
+              <div className="md:col-span-1 space-y-4">
+                <h4 className="text-[10px] font-bold text-[#787774] uppercase tracking-widest flex items-center gap-2">
+                  <BrainCircuit className="w-3.5 h-3.5" />
+                  Key Drivers
+                </h4>
+                <ul className="space-y-3">
+                  {analysis.keyFactors.map((factor, i) => (
+                    <li key={i} className="flex items-start gap-3 text-xs text-[#37352f] leading-relaxed">
+                      <div className="mt-1.5 w-1.5 h-1.5 rounded-full bg-[#37352f]/20 shrink-0" />
+                      <span>{factor}</span>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+
+              {/* Right Column: News Bullet Points */}
+              <div className="md:col-span-2 space-y-8">
+                <div className="space-y-4">
+                  <h4 className="text-[10px] font-bold text-[#787774] uppercase tracking-widest flex items-center gap-2">
+                    <FileText className="w-3.5 h-3.5" />
+                    Market Intelligence (AI Synthesized)
+                  </h4>
+                  <div className="space-y-6">
+                    {analysis.news.map((item, i) => (
+                      <motion.div 
+                        initial={{ opacity: 0, y: 10 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        transition={{ delay: i * 0.1 }}
+                        key={i} 
+                        className="flex gap-4 group"
+                      >
+                        <div className="mt-2 w-2 h-2 rounded-full border-2 border-[#2383e2] shrink-0" />
+                        <div className="flex-1 space-y-2">
+                          <div className="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1">
+                            <h5 className="font-bold text-sm text-[#37352f] group-hover:text-[#2383e2] transition-colors">
+                              {item.title}
+                            </h5>
+                            <div className="flex items-center gap-2">
+                              <span className="text-[10px] font-bold text-[#787774] uppercase tracking-widest bg-[#f1f1ef] px-2 py-0.5 rounded">
+                                {item.source}
+                              </span>
+                              <span className={cn(
+                                "text-[8px] font-bold uppercase px-1.5 py-0.5 rounded border tracking-tighter",
+                                item.sentiment === 'bullish' ? "text-[#00875a] bg-[#e3fcef] border-[#00875a]/20" : 
+                                item.sentiment === 'bearish' ? "text-[#de350b] bg-[#ffebe6] border-[#de350b]/20" : 
+                                "text-[#787774] bg-[#f1f1ef] border-[#787774]/20"
+                              )}>
+                                {item.sentiment}
+                              </span>
+                            </div>
+                          </div>
+                          <p className="text-xs text-[#787774] leading-relaxed">
+                            {item.summary}
+                          </p>
+                          {item.url && (
+                            <a 
+                              href={item.url} 
+                              target="_blank" 
+                              rel="noopener noreferrer"
+                              className="inline-flex items-center gap-1 text-[10px] font-bold text-[#2383e2] hover:underline"
+                            >
+                              Full Article <ExternalLink className="w-2.5 h-2.5" />
+                            </a>
+                          )}
+                        </div>
+                      </motion.div>
+                    ))}
+                  </div>
+                </div>
+
+                {/* NewsAPI Headlines Section */}
+                <div className="space-y-4 pt-6 border-t border-[#f1f1ef]">
+                  <h4 className="text-[10px] font-bold text-[#787774] uppercase tracking-widest flex items-center gap-2">
+                    <Globe className="w-3.5 h-3.5" />
+                    Latest Headlines (NewsAPI)
+                  </h4>
+                  {loadingNews ? (
+                    <div className="flex items-center gap-2 py-4">
+                      <RefreshCw className="w-3 h-3 animate-spin text-[#2383e2]" />
+                      <span className="text-[10px] font-mono text-[#787774] uppercase tracking-widest">Fetching live news...</span>
+                    </div>
+                  ) : newsHeadlines.length > 0 ? (
+                    <div className="grid gap-3">
+                      {newsHeadlines.map((headline, i) => (
+                        <motion.a
+                          initial={{ opacity: 0, x: -5 }}
+                          animate={{ opacity: 1, x: 0 }}
+                          transition={{ delay: i * 0.05 }}
+                          key={i}
+                          href={headline.url}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="p-3 bg-[#f7f6f3] hover:bg-[#f1f1ef] rounded border border-transparent hover:border-[#2383e2]/20 transition-all group"
+                        >
+                          <div className="flex justify-between items-start gap-4">
+                            <p className="text-xs font-bold text-[#37352f] group-hover:text-[#2383e2] transition-colors line-clamp-2">
+                              {headline.title}
+                            </p>
+                            <ExternalLink className="w-3 h-3 text-[#787774] opacity-0 group-hover:opacity-100 transition-opacity shrink-0" />
+                          </div>
+                          <div className="flex items-center gap-2 mt-2">
+                            <span className="text-[9px] font-bold text-[#787774] uppercase tracking-widest">{headline.source}</span>
+                            <span className="text-[9px] text-[#787774] opacity-40">•</span>
+                            <span className="text-[9px] text-[#787774]">{new Date(headline.publishedAt).toLocaleDateString()}</span>
+                          </div>
+                        </motion.a>
+                      ))}
+                    </div>
+                  ) : (
+                    <p className="text-[10px] text-[#787774] italic">No recent headlines found for this pair.</p>
+                  )}
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div className="p-4 bg-[#f7f6f3] border-t border-[#f1f1ef] flex items-center px-8">
+          <div className="flex items-center gap-4 text-[10px] font-mono text-[#787774]">
+            <div className="flex items-center gap-1.5">
+              <Clock className="w-3 h-3" />
+              <span>Synthesized: {analysis.lastUpdate}</span>
+            </div>
+          </div>
+        </div>
+      </motion.div>
+    </div>
+  );
+};
+
+const InsightsModal = ({ analysis, onClose }: { analysis: PairAnalysis, onClose: () => void }) => {
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+      <motion.div 
+        initial={{ opacity: 0 }}
+        animate={{ opacity: 1 }}
+        exit={{ opacity: 0 }}
+        onClick={onClose}
+        className="absolute inset-0 bg-black/40 backdrop-blur-[2px]"
+      />
+      <motion.div 
+        initial={{ opacity: 0, scale: 0.98, y: 10 }}
+        animate={{ opacity: 1, scale: 1, y: 0 }}
+        exit={{ opacity: 0, scale: 0.98, y: 10 }}
+        className="relative w-full max-w-2xl bg-white border border-[#f1f1ef] rounded-lg overflow-hidden shadow-2xl flex flex-col max-h-[85vh]"
+      >
+        <div className="p-6 border-b border-[#f1f1ef] flex justify-between items-center bg-[#f7f6f3]">
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 rounded bg-[#2383e2] flex items-center justify-center">
+              <BrainCircuit className="w-5 h-5 text-white" />
+            </div>
+            <div>
+              <h2 className="text-xl font-bold text-[#37352f]">{analysis.pair} Beginner Insights</h2>
+              <p className="text-[10px] font-mono text-[#787774] uppercase tracking-widest">AI-Simplified Market Logic</p>
+            </div>
+          </div>
+          <button onClick={onClose} className="p-2 hover:bg-[#f1f1ef] rounded-full transition-colors">
+            <X className="w-6 h-6 text-[#787774]" />
+          </button>
+        </div>
+
+        <div className="flex-1 overflow-y-auto p-8 custom-scrollbar">
+          <div className="space-y-8">
+            {/* Minimized Confidence Indicator */}
+            <div className="flex items-center justify-between p-4 bg-[#f7f6f3] rounded-lg border border-[#f1f1ef]">
+              <div className="flex items-center gap-3">
+                <div className={cn(
+                  "w-2 h-2 rounded-full",
+                  analysis.bias === 'bullish' ? "bg-[#00875a]" : 
+                  analysis.bias === 'bearish' ? "bg-[#de350b]" : "bg-[#37352f]"
+                )} />
+                <span className="text-xs font-bold text-[#37352f] uppercase tracking-wider">{analysis.bias} Bias</span>
+              </div>
+              <div className="flex items-center gap-2">
+                <span className="text-[10px] font-bold text-[#787774] uppercase tracking-widest">AI Confidence</span>
+                <span className="text-sm font-bold text-[#37352f]">{analysis.confidence}%</span>
+              </div>
+            </div>
+
+            <div className="space-y-6">
+              <div className="space-y-4">
+                <h4 className="text-[10px] font-bold text-[#787774] uppercase tracking-widest flex items-center gap-2">
+                  <Globe className="w-3.5 h-3.5" />
+                  Why is this pair {analysis.bias === 'bullish' ? 'Strong' : analysis.bias === 'bearish' ? 'Weak' : 'Neutral'}?
+                </h4>
+                <div className="grid gap-4">
+                  {analysis.insights.map((insight, i) => (
+                    <motion.div 
+                      initial={{ opacity: 0, x: -10 }}
+                      animate={{ opacity: 1, x: 0 }}
+                      transition={{ delay: i * 0.1 }}
+                      key={i} 
+                      className="p-4 bg-white border border-[#f1f1ef] rounded-lg shadow-sm flex gap-4 items-start group hover:border-[#2383e2]/30 transition-colors"
+                    >
+                      <div className="mt-1 w-5 h-5 rounded-full bg-[#2383e2]/10 flex items-center justify-center shrink-0">
+                        <span className="text-[10px] font-bold text-[#2383e2]">{i + 1}</span>
+                      </div>
+                      <p className="text-sm text-[#37352f] leading-relaxed">
+                        {insight}
+                      </p>
+                    </motion.div>
+                  ))}
+                </div>
+              </div>
+
+              <div className="p-6 bg-[#2383e2]/5 rounded-xl border border-[#2383e2]/10">
+                <h4 className="text-[10px] font-bold text-[#2383e2] uppercase tracking-widest mb-3">The Bottom Line</h4>
+                <p className="text-sm text-[#37352f] leading-relaxed italic">
+                  "{analysis.summary}"
+                </p>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div className="p-4 bg-[#f7f6f3] border-t border-[#f1f1ef] flex items-center px-8">
+          <div className="flex items-center gap-4 text-[10px] font-mono text-[#787774]">
+            <div className="flex items-center gap-1.5">
+              <Clock className="w-3 h-3" />
+              <span>Synthesized: {analysis.lastUpdate}</span>
+            </div>
+          </div>
+        </div>
+      </motion.div>
+    </div>
+  );
+};
+
+const AVAILABLE_ASSETS = {
+  Forex: ['EUR/USD', 'GBP/USD', 'USD/JPY', 'AUD/USD', 'USD/CAD', 'USD/CHF', 'NZD/USD', 'EUR/GBP', 'EUR/JPY', 'GBP/JPY'],
+  Commodities: ['XAU/USD', 'XAG/USD', 'OIL', 'BRENT', 'NGAS', 'COPPER'],
+  Stocks: ['US100', 'US30', 'US500', 'GER40', 'UK100', 'AAPL', 'TSLA', 'NVDA', 'MSFT', 'AMZN', 'GOOGL']
+};
+
+const CACHE_KEY = 'vantage_market_cache';
+const CACHE_DURATION = 30 * 60 * 1000; // 30 minutes
+
+export default function App() {
+  const [pairs, setPairs] = useState(INITIAL_PAIRS);
+  const [analyses, setAnalyses] = useState<Record<string, PairAnalysis | null>>(() => {
+    try {
+      const cached = localStorage.getItem(CACHE_KEY);
+      if (cached) {
+        const parsed = JSON.parse(cached);
+        // Filter out expired entries
+        const now = Date.now();
+        const validCache: Record<string, PairAnalysis> = {};
+        Object.entries(parsed).forEach(([pair, data]: [string, any]) => {
+          if (data.timestamp && (now - data.timestamp < CACHE_DURATION)) {
+            validCache[pair] = data;
+          }
+        });
+        return validCache;
+      }
+    } catch (e) {
+      console.error('Failed to load cache:', e);
+    }
+    return {};
+  });
+  const [loadingStates, setLoadingStates] = useState<Record<string, boolean>>({});
+  const [retryStates, setRetryStates] = useState<Record<string, { attempt: number, delay: number } | null>>({});
+  const [showAddModal, setShowAddModal] = useState(false);
+  const [searchQuery, setSearchQuery] = useState('');
+  const [activeCategory, setActiveCategory] = useState<keyof typeof AVAILABLE_ASSETS>('Forex');
+  const [selectedAnalysis, setSelectedAnalysis] = useState<PairAnalysis | null>(null);
+  const [selectedInsights, setSelectedInsights] = useState<PairAnalysis | null>(null);
+
+  // Save to cache whenever analyses change
+  useEffect(() => {
+    localStorage.setItem(CACHE_KEY, JSON.stringify(analyses));
+  }, [analyses]);
+
+  const fetchPairData = async (pair: string, force = false) => {
+    // Check cache first if not forcing
+    if (!force && analyses[pair]) {
+      const cachedData = analyses[pair] as any;
+      if (cachedData.timestamp && (Date.now() - cachedData.timestamp < CACHE_DURATION)) {
+        return;
+      }
+    }
+
+    setLoadingStates(prev => ({ ...prev, [pair]: true }));
+    setRetryStates(prev => ({ ...prev, [pair]: null }));
+    try {
+      // Fetch real-time price first to provide context to Gemini
+      const priceData = await fetchRealTimePrice(pair);
+      
+      const result = await analyzeMarket(pair, priceData || undefined, (attempt, delay) => {
+        setRetryStates(prev => ({ ...prev, [pair]: { attempt, delay } }));
+      });
+      
+      const analysisWithTimestamp = {
+        ...result,
+        timestamp: Date.now()
+      };
+
+      setAnalyses(prev => ({ ...prev, [pair]: analysisWithTimestamp }));
+      setRetryStates(prev => ({ ...prev, [pair]: null }));
+    } catch (err) {
+      console.error(`Failed to fetch ${pair}:`, err);
+    } finally {
+      setLoadingStates(prev => ({ ...prev, [pair]: false }));
+    }
+  };
+
+  // Disable automatic initialization to save Gemini API requests
+  // useEffect(() => {
+  //   const initializeAnalyses = async () => {
+  //     for (let i = 0; i < pairs.length; i++) {
+  //       const pair = pairs[i];
+  //       // Only fetch if not in cache or expired
+  //       const cached = analyses[pair] as any;
+  //       const needsFetch = !cached || !cached.timestamp || (Date.now() - cached.timestamp > CACHE_DURATION);
+  //       
+  //       if (needsFetch) {
+  //         // Stagger requests by 3 seconds to be extra safe with rate limits
+  //         if (i > 0) await new Promise(resolve => setTimeout(resolve, 3000));
+  //         await fetchPairData(pair);
+  //       }
+  //     }
+  //   };
+  //   
+  //   initializeAnalyses();
+  // }, [pairs]);
+
+  const handleAddPair = (pair: string) => {
+    if (!pairs.includes(pair)) {
+      setPairs([...pairs, pair]);
+      setShowAddModal(false);
+      setSearchQuery('');
+    }
+  };
+
+  const handleRemovePair = (pair: string) => {
+    setPairs(pairs.filter(p => p !== pair));
+    const newAnalyses = { ...analyses };
+    delete newAnalyses[pair];
+    setAnalyses(newAnalyses);
+  };
+
+  const filteredAssets = AVAILABLE_ASSETS[activeCategory].filter(asset => 
+    asset.toLowerCase().includes(searchQuery.toLowerCase())
+  );
+
+  return (
+    <div className="min-h-screen bg-white text-[#37352f] selection:bg-[#2383e2]/30">
+      {/* Main Content */}
+      <main className="flex flex-col overflow-hidden">
+        <PriceMarquee />
+        <header className="h-14 border-b border-[#f1f1ef] flex items-center justify-between px-10 shrink-0 bg-white/80 backdrop-blur-md z-10">
+          <div className="flex items-center gap-4">
+            <h1 className="text-sm font-bold text-[#37352f]">Market Bias Dashboard</h1>
+            <div className="h-4 w-px bg-[#f1f1ef]" />
+            <div className="flex items-center gap-2 text-[10px] font-medium text-[#787774]">
+              <Clock className="w-3 h-3" />
+              <span>Institutional Analysis Distilled</span>
+            </div>
+          </div>
+          
+          <div className="flex items-center gap-4">
+            <button 
+              onClick={() => setShowAddModal(true)}
+              className="px-4 py-2 bg-black text-white text-[11px] font-bold rounded-xl border border-black hover:bg-[#37352f] transition-all flex items-center gap-2 shadow-sm"
+            >
+              <Plus className="w-3.5 h-3.5" />
+              Add Pair
+            </button>
+          </div>
+        </header>
+
+        <div className="flex-1 overflow-y-auto p-10 custom-scrollbar notebook-paper">
+          <div className="max-w-7xl mx-auto">
+            <div className="mb-10">
+              <TypingHeader text="Welcome ogabagt3" />
+              <p className="text-[#787774] text-sm">Real-time synthesis of global financial news and institutional sentiment.</p>
+            </div>
+            
+            <div className="bento-grid">
+              {pairs.map((pair, idx) => (
+                <MarketCard 
+                  key={pair}
+                  pair={pair}
+                  featured={idx === 0}
+                  analysis={analyses[pair]}
+                  isLoading={loadingStates[pair]}
+                  retryStatus={retryStates[pair]}
+                  onRefresh={() => fetchPairData(pair, true)}
+                  onDetails={(analysis) => setSelectedAnalysis(analysis)}
+                  onInsights={(analysis) => setSelectedInsights(analysis)}
+                  onRemove={() => handleRemovePair(pair)}
+                />
+              ))}
+            </div>
+          </div>
+        </div>
+      </main>
+
+      {/* Add Modal */}
+      <AnimatePresence>
+        {showAddModal && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+            <motion.div 
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              onClick={() => setShowAddModal(false)}
+              className="absolute inset-0 bg-black/40 backdrop-blur-[2px]"
+            />
+            <motion.div 
+              initial={{ opacity: 0, scale: 0.98, y: 10 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.98, y: 10 }}
+              className="relative w-full max-w-2xl bg-white border border-[#f1f1ef] rounded-lg overflow-hidden shadow-2xl flex flex-col max-h-[80vh]"
+            >
+              <div className="p-6 border-b border-[#f1f1ef]">
+                <div className="flex justify-between items-center mb-6">
+                  <h2 className="text-lg font-bold text-[#37352f]">Add Market Pair</h2>
+                  <button onClick={() => setShowAddModal(false)} className="p-1.5 hover:bg-[#f1f1ef] rounded transition-colors">
+                    <X className="w-5 h-5 text-[#787774]" />
+                  </button>
+                </div>
+                
+                <div className="relative">
+                  <input 
+                    autoFocus
+                    type="text" 
+                    value={searchQuery}
+                    onChange={(e) => setSearchQuery(e.target.value)}
+                    placeholder="Search symbols..."
+                    className="w-full bg-[#f1f1ef] border-none rounded px-4 py-2.5 text-sm focus:ring-2 focus:ring-[#2383e2]/20 transition-all placeholder:text-[#787774]/60"
+                  />
+                </div>
+              </div>
+
+              <div className="flex border-b border-[#f1f1ef]">
+                {(Object.keys(AVAILABLE_ASSETS) as Array<keyof typeof AVAILABLE_ASSETS>).map((category) => (
+                  <button
+                    key={category}
+                    onClick={() => setActiveCategory(category)}
+                    className={cn(
+                      "flex-1 py-3 text-[11px] font-bold uppercase tracking-wider transition-all border-b-2",
+                      activeCategory === category 
+                        ? "text-[#2383e2] border-[#2383e2] bg-[#2383e2]/5" 
+                        : "text-[#787774] border-transparent hover:bg-[#f1f1ef]"
+                    )}
+                  >
+                    {category}
+                  </button>
+                ))}
+              </div>
+
+              <div className="flex-1 overflow-y-auto p-6 custom-scrollbar bg-white">
+                <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
+                  {filteredAssets.length > 0 ? (
+                    filteredAssets.map((asset) => (
+                      <button
+                        key={asset}
+                        onClick={() => handleAddPair(asset)}
+                        disabled={pairs.includes(asset)}
+                        className={cn(
+                          "p-3 rounded border text-left transition-all group",
+                          pairs.includes(asset)
+                            ? "bg-[#f1f1ef] border-transparent opacity-50 cursor-not-allowed"
+                            : "bg-white border-[#f1f1ef] hover:border-[#2383e2]/30 hover:bg-[#f1f1ef]"
+                        )}
+                      >
+                        <div className="text-xs font-bold text-[#37352f] group-hover:text-[#2383e2] transition-colors">{asset}</div>
+                        <div className="text-[9px] font-medium text-[#787774] mt-1 uppercase tracking-wider">
+                          {pairs.includes(asset) ? 'Added' : 'Add'}
+                        </div>
+                      </button>
+                    ))
+                  ) : (
+                    <div className="col-span-full py-10 text-center text-[#787774] text-xs">
+                      No assets found matching "{searchQuery}"
+                    </div>
+                  )}
+                </div>
+              </div>
+              
+              <div className="p-4 bg-[#f7f6f3] border-t border-[#f1f1ef]">
+                <p className="text-[10px] text-[#787774] font-medium uppercase text-center tracking-widest">
+                  Select an asset to begin AI synthesis
+                </p>
+              </div>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
+
+      {/* Details Modal */}
+      <AnimatePresence>
+        {selectedAnalysis && (
+          <DetailsModal 
+            analysis={selectedAnalysis} 
+            onClose={() => setSelectedAnalysis(null)} 
+          />
+        )}
+      </AnimatePresence>
+
+      <AnimatePresence>
+        {selectedInsights && (
+          <InsightsModal 
+            analysis={selectedInsights} 
+            onClose={() => setSelectedInsights(null)} 
+          />
+        )}
+      </AnimatePresence>
+    </div>
+  );
+}
