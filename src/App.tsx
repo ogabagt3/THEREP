@@ -29,7 +29,11 @@ import {
   User,
   Settings,
   ChevronDown,
-  Camera
+  Camera,
+  Menu,
+  CheckCircle2,
+  ListTodo,
+  LayoutDashboard
 } from 'lucide-react';
 import { analyzeMarket, PairAnalysis } from './services/geminiService';
 import { fetchRealTimePrice, fetchNewsHeadlines, PriceData, NewsHeadline } from './services/marketDataService';
@@ -115,7 +119,7 @@ const ProfileModal = ({ profile, onSave, onClose }: { profile: UserProfile, onSa
         initial={{ opacity: 0, scale: 0.98, y: 10 }}
         animate={{ opacity: 1, scale: 1, y: 0 }}
         exit={{ opacity: 0, scale: 0.98, y: 10 }}
-        className="relative w-full max-w-md bg-white border border-[#f1f1ef] rounded-lg overflow-hidden shadow-2xl flex flex-col font-roboto"
+        className="relative w-full max-w-lg bg-white border border-[#f1f1ef] rounded-lg overflow-hidden shadow-2xl flex flex-col font-roboto"
       >
         <div className="p-6 border-b border-[#f1f1ef] flex justify-between items-center bg-[#f7f6f3]">
           <div className="flex items-center gap-3">
@@ -183,7 +187,7 @@ const ProfileModal = ({ profile, onSave, onClose }: { profile: UserProfile, onSa
                   <img 
                     src={editedProfile.avatar} 
                     alt="Avatar" 
-                    className="w-24 h-24 rounded-full border-4 border-[#f1f1ef] object-cover"
+                    className="w-16 h-16 rounded-full border-4 border-[#f1f1ef] object-cover shadow-sm"
                     referrerPolicy="no-referrer"
                   />
                   <input 
@@ -216,38 +220,38 @@ const ProfileModal = ({ profile, onSave, onClose }: { profile: UserProfile, onSa
                   />
                 </div>
 
-                <div className="grid grid-cols-2 gap-4">
+                <div className="grid grid-cols-2 gap-6">
                   <div className="space-y-1.5">
                     <label className="text-[10px] font-black text-[#37352f] uppercase tracking-widest">Trading Style</label>
-                    <div className="relative">
+                    <div className="relative group">
                       <select 
                         value={editedProfile.tradingStyle}
                         onChange={(e) => setEditedProfile({...editedProfile, tradingStyle: e.target.value})}
-                        className="w-full bg-white border border-[#f1f1ef] rounded-lg px-4 py-2.5 text-sm focus:ring-2 focus:ring-[#2383e2]/20 transition-all appearance-none outline-none shadow-sm"
+                        className="w-full bg-white border border-[#f1f1ef] rounded-lg px-4 py-2.5 text-sm focus:ring-2 focus:ring-[#2383e2]/20 transition-all appearance-none outline-none shadow-sm hover:border-[#787774]/30 cursor-pointer"
                       >
                         <option>Day Trader</option>
                         <option>Swing Trader</option>
                         <option>Scalper</option>
                         <option>Position Trader</option>
                       </select>
-                      <ChevronDown className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-[#787774] pointer-events-none" />
+                      <ChevronDown className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-[#787774] pointer-events-none group-hover:text-[#37352f] transition-colors" />
                     </div>
                   </div>
 
                   <div className="space-y-1.5">
                     <label className="text-[10px] font-black text-[#37352f] uppercase tracking-widest">Experience</label>
-                    <div className="relative">
+                    <div className="relative group">
                       <select 
                         value={editedProfile.experience}
                         onChange={(e) => setEditedProfile({...editedProfile, experience: e.target.value})}
-                        className="w-full bg-white border border-[#f1f1ef] rounded-lg px-4 py-2.5 text-sm focus:ring-2 focus:ring-[#2383e2]/20 transition-all appearance-none outline-none shadow-sm"
+                        className="w-full bg-white border border-[#f1f1ef] rounded-lg px-4 py-2.5 text-sm focus:ring-2 focus:ring-[#2383e2]/20 transition-all appearance-none outline-none shadow-sm hover:border-[#787774]/30 cursor-pointer"
                       >
                         <option>Beginner</option>
                         <option>Intermediate</option>
                         <option>Advanced</option>
                         <option>Institutional</option>
                       </select>
-                      <ChevronDown className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-[#787774] pointer-events-none" />
+                      <ChevronDown className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-[#787774] pointer-events-none group-hover:text-[#37352f] transition-colors" />
                     </div>
                   </div>
                 </div>
@@ -973,6 +977,345 @@ const AVAILABLE_ASSETS = {
 const CACHE_KEY = 'vantage_market_cache';
 const CACHE_DURATION = 30 * 60 * 1000; // 30 minutes
 
+interface ChecklistItemData {
+  id: string;
+  text: string;
+  completed: boolean;
+}
+
+interface Strategy {
+  id: string;
+  name: string;
+  categories: {
+    "Trading System": ChecklistItemData[];
+    "Trade Management": ChecklistItemData[];
+    "Risk Management": ChecklistItemData[];
+  };
+}
+
+const ChecklistItem = ({ text, completed, onToggle, onDelete }: { text: string, completed: boolean, onToggle: () => void, onDelete: () => void }) => (
+  <div className="group relative">
+    <button 
+      onClick={onToggle}
+      className={cn(
+        "w-full flex items-center gap-3 p-4 rounded-xl border transition-all text-left",
+        completed 
+          ? "bg-[#f7f6f3] border-[#f1f1ef] text-[#787774]" 
+          : "bg-white border-[#f1f1ef] text-[#37352f] hover:border-[#2383e2]/30 hover:shadow-sm"
+      )}
+    >
+      <div className={cn(
+        "w-5 h-5 rounded-full border flex items-center justify-center transition-all",
+        completed ? "bg-[#2383e2] border-[#2383e2]" : "bg-white border-[#f1f1ef] group-hover:border-[#2383e2]"
+      )}>
+        {completed && <CheckCircle2 className="w-3.5 h-3.5 text-white" />}
+      </div>
+      <span className={cn("text-sm font-medium pr-8", completed && "line-through opacity-60")}>{text}</span>
+    </button>
+    <button 
+      onClick={(e) => {
+        e.stopPropagation();
+        onDelete();
+      }}
+      className="absolute right-3 top-1/2 -translate-y-1/2 p-2 text-[#787774] opacity-0 group-hover:opacity-100 hover:text-red-500 transition-all"
+    >
+      <Trash2 className="w-4 h-4" />
+    </button>
+  </div>
+);
+
+const Checklist = () => {
+  const [strategies, setStrategies] = useState<Strategy[]>(() => {
+    const cached = localStorage.getItem('trading_strategies');
+    return cached ? JSON.parse(cached) : [];
+  });
+  const [activeStrategyId, setActiveStrategyId] = useState<string | null>(() => {
+    return localStorage.getItem('active_strategy_id');
+  });
+  const [showAddStrategy, setShowAddStrategy] = useState(false);
+  const [newStrategyName, setNewStrategyName] = useState('');
+  const [activeTab, setActiveTab] = useState<keyof Strategy['categories']>('Trading System');
+  const [newItemText, setNewItemText] = useState('');
+  const [showAddItemModal, setShowAddItemModal] = useState(false);
+
+  useEffect(() => {
+    localStorage.setItem('trading_strategies', JSON.stringify(strategies));
+    if (strategies.length > 0 && !activeStrategyId) {
+      setActiveStrategyId(strategies[0].id);
+    }
+  }, [strategies, activeStrategyId]);
+
+  useEffect(() => {
+    if (activeStrategyId) {
+      localStorage.setItem('active_strategy_id', activeStrategyId);
+    }
+  }, [activeStrategyId]);
+
+  const activeStrategy = strategies.find(s => s.id === activeStrategyId);
+
+  const handleAddStrategy = () => {
+    if (!newStrategyName.trim()) return;
+    const newStrategy: Strategy = {
+      id: Date.now().toString(),
+      name: newStrategyName,
+      categories: {
+        "Trading System": [],
+        "Trade Management": [],
+        "Risk Management": []
+      }
+    };
+    setStrategies([...strategies, newStrategy]);
+    setActiveStrategyId(newStrategy.id);
+    setNewStrategyName('');
+    setShowAddStrategy(false);
+  };
+
+  const handleAddItem = () => {
+    if (!newItemText.trim() || !activeStrategyId) return;
+    setStrategies(strategies.map(s => {
+      if (s.id === activeStrategyId) {
+        return {
+          ...s,
+          categories: {
+            ...s.categories,
+            [activeTab]: [
+              ...s.categories[activeTab],
+              { id: Date.now().toString(), text: newItemText, completed: false }
+            ]
+          }
+        };
+      }
+      return s;
+    }));
+    setNewItemText('');
+    setShowAddItemModal(false);
+  };
+
+  const toggleItem = (itemId: string) => {
+    setStrategies(strategies.map(s => {
+      if (s.id === activeStrategyId) {
+        return {
+          ...s,
+          categories: {
+            ...s.categories,
+            [activeTab]: s.categories[activeTab].map(item => 
+              item.id === itemId ? { ...item, completed: !item.completed } : item
+            )
+          }
+        };
+      }
+      return s;
+    }));
+  };
+
+  const deleteItem = (itemId: string) => {
+    setStrategies(strategies.map(s => {
+      if (s.id === activeStrategyId) {
+        return {
+          ...s,
+          categories: {
+            ...s.categories,
+            [activeTab]: s.categories[activeTab].filter(item => item.id !== itemId)
+          }
+        };
+      }
+      return s;
+    }));
+  };
+
+  const deleteStrategy = (strategyId: string) => {
+    const updated = strategies.filter(s => s.id !== strategyId);
+    setStrategies(updated);
+    if (activeStrategyId === strategyId) {
+      setActiveStrategyId(updated.length > 0 ? updated[0].id : null);
+    }
+  };
+
+  const allItems = activeStrategy 
+    ? [...activeStrategy.categories["Trading System"], ...activeStrategy.categories["Trade Management"], ...activeStrategy.categories["Risk Management"]]
+    : [];
+  const progress = allItems.length > 0 
+    ? Math.round((allItems.filter(i => i.completed).length / allItems.length) * 100)
+    : 0;
+
+  if (strategies.length === 0 || showAddStrategy) {
+    return (
+      <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-[100] flex items-center justify-center p-6">
+        <motion.div 
+          initial={{ opacity: 0, scale: 0.95 }}
+          animate={{ opacity: 1, scale: 1 }}
+          className="bg-white rounded-3xl p-8 w-full max-w-md shadow-2xl border border-[#f1f1ef]"
+        >
+          <h2 className="text-2xl font-bold text-[#37352f] mb-2">Define Your Strategy</h2>
+          <p className="text-[#787774] text-sm mb-6">Every successful trader follows a repeatable process. Name your strategy to begin.</p>
+          
+          <div className="space-y-4">
+            <div>
+              <label className="block text-[10px] font-black text-[#787774] uppercase tracking-widest mb-2">Strategy Name</label>
+              <input 
+                type="text"
+                value={newStrategyName}
+                onChange={(e) => setNewStrategyName(e.target.value)}
+                placeholder="e.g. Trend Following, Mean Reversion..."
+                className="w-full px-4 py-3 bg-[#f7f6f3] border border-[#f1f1ef] rounded-xl text-sm focus:outline-none focus:border-[#2383e2] transition-all"
+                autoFocus
+                onKeyDown={(e) => e.key === 'Enter' && handleAddStrategy()}
+              />
+            </div>
+            
+            <button 
+              onClick={handleAddStrategy}
+              disabled={!newStrategyName.trim()}
+              className="w-full py-4 bg-black text-white text-xs font-bold rounded-xl hover:bg-[#37352f] transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              Initialize Strategy
+            </button>
+            {strategies.length > 0 && (
+              <button 
+                onClick={() => setShowAddStrategy(false)}
+                className="w-full py-2 text-[10px] font-black text-[#787774] uppercase tracking-widest hover:text-[#37352f]"
+              >
+                Cancel
+              </button>
+            )}
+          </div>
+        </motion.div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="max-w-3xl mx-auto py-10 px-6">
+      <div className="mb-10">
+        <div className="flex justify-between items-end mb-6">
+          <div>
+            <div className="flex items-center gap-3 mb-1">
+              <h2 className="text-2xl font-bold text-[#37352f]">{activeStrategy?.name}</h2>
+              <button 
+                onClick={() => activeStrategy && deleteStrategy(activeStrategy.id)}
+                className="p-1.5 text-[#787774] hover:text-red-500 transition-colors"
+                title="Delete Strategy"
+              >
+                <Trash2 className="w-4 h-4" />
+              </button>
+            </div>
+            <p className="text-[#787774] text-sm">Pre-trade protocol for your {activeStrategy?.name} system.</p>
+          </div>
+          <button 
+            onClick={() => setShowAddStrategy(true)}
+            className="flex items-center gap-2 px-3 py-1.5 bg-[#f7f6f3] border border-[#f1f1ef] rounded-lg text-[10px] font-black text-[#37352f] uppercase tracking-widest hover:bg-[#f1f1ef] transition-all"
+          >
+            <Plus className="w-3 h-3" />
+            New Strategy
+          </button>
+        </div>
+        
+        <div className="bg-[#f7f6f3] rounded-2xl p-6 border border-[#f1f1ef]">
+          <div className="flex justify-between items-center mb-4">
+            <span className="text-xs font-bold text-[#37352f] uppercase tracking-widest">Readiness Score</span>
+            <span className="text-sm font-bold text-[#2383e2]">{progress}%</span>
+          </div>
+          <div className="h-2 w-full bg-white rounded-full overflow-hidden border border-[#f1f1ef]">
+            <motion.div 
+              initial={{ width: 0 }}
+              animate={{ width: `${progress}%` }}
+              className="h-full bg-[#2383e2]"
+            />
+          </div>
+        </div>
+      </div>
+
+      <div className="flex gap-1 mb-8 p-1 bg-[#f7f6f3] rounded-xl border border-[#f1f1ef]">
+        {(['Trading System', 'Trade Management', 'Risk Management'] as const).map((tab) => (
+          <button
+            key={tab}
+            onClick={() => setActiveTab(tab)}
+            className={cn(
+              "flex-1 py-2 text-[10px] font-black uppercase tracking-widest rounded-lg transition-all",
+              activeTab === tab 
+                ? "bg-white text-[#37352f] shadow-sm border border-[#f1f1ef]" 
+                : "text-[#787774] hover:text-[#37352f]"
+            )}
+          >
+            {tab}
+          </button>
+        ))}
+      </div>
+
+      <div className="bg-white rounded-3xl border border-[#f1f1ef] shadow-sm overflow-hidden flex flex-col min-h-[400px]">
+        <div className="p-8 flex-1">
+          <div className="space-y-3">
+            {activeStrategy?.categories[activeTab].length === 0 ? (
+              <div className="py-20 text-center border-2 border-dashed border-[#f1f1ef] rounded-2xl">
+                <p className="text-sm text-[#787774]">No items in this category yet.</p>
+                <p className="text-xs text-[#a1a19f] mt-1">Add your first criteria below.</p>
+              </div>
+            ) : (
+              activeStrategy?.categories[activeTab].map((item) => (
+                <ChecklistItem 
+                  key={item.id} 
+                  text={item.text} 
+                  completed={item.completed} 
+                  onToggle={() => toggleItem(item.id)} 
+                  onDelete={() => deleteItem(item.id)}
+                />
+              ))
+            )}
+          </div>
+        </div>
+
+        <div className="p-6 border-t border-[#f1f1ef] bg-[#fcfcfb] flex justify-center">
+          <button 
+            onClick={() => setShowAddItemModal(true)}
+            className="group flex items-center gap-2 px-6 py-3 bg-white border border-[#f1f1ef] rounded-full shadow-sm hover:border-[#2383e2]/30 hover:shadow-md transition-all"
+          >
+            <Plus className="w-4 h-4 text-[#2383e2]" />
+            <span className="text-xs font-bold text-[#37352f]">Add {activeTab} Criteria</span>
+          </button>
+        </div>
+      </div>
+
+      <AnimatePresence>
+        {showAddItemModal && (
+          <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-[110] flex items-center justify-center p-6">
+            <motion.div 
+              initial={{ opacity: 0, scale: 0.95 }}
+              animate={{ opacity: 1, scale: 1 }}
+              exit={{ opacity: 0, scale: 0.95 }}
+              className="bg-white rounded-3xl p-8 w-full max-w-md shadow-2xl border border-[#f1f1ef]"
+            >
+              <div className="flex justify-between items-center mb-6">
+                <h3 className="text-lg font-bold text-[#37352f]">Add {activeTab} Item</h3>
+                <button onClick={() => setShowAddItemModal(false)} className="text-[#787774] hover:text-[#37352f]">
+                  <X className="w-5 h-5" />
+                </button>
+              </div>
+              
+              <div className="space-y-4">
+                <textarea 
+                  value={newItemText}
+                  onChange={(e) => setNewItemText(e.target.value)}
+                  placeholder="Describe your criteria..."
+                  className="w-full px-4 py-3 bg-[#f7f6f3] border border-[#f1f1ef] rounded-xl text-sm focus:outline-none focus:border-[#2383e2] transition-all min-h-[100px] resize-none"
+                  autoFocus
+                />
+                
+                <button 
+                  onClick={handleAddItem}
+                  disabled={!newItemText.trim()}
+                  className="w-full py-4 bg-black text-white text-xs font-bold rounded-xl hover:bg-[#37352f] transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  Add to Checklist
+                </button>
+              </div>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
+    </div>
+  );
+};
+
 export default function App() {
   const [pairs, setPairs] = useState(INITIAL_PAIRS);
   const [analyses, setAnalyses] = useState<Record<string, PairAnalysis | null>>(() => {
@@ -1003,6 +1346,8 @@ export default function App() {
   const [selectedAnalysis, setSelectedAnalysis] = useState<PairAnalysis | null>(null);
   const [selectedInsights, setSelectedInsights] = useState<PairAnalysis | null>(null);
   const [showProfileModal, setShowProfileModal] = useState(false);
+  const [isSidebarOpen, setIsSidebarOpen] = useState(false);
+  const [currentView, setCurrentView] = useState<'dashboard' | 'checklist'>('dashboard');
   const [userProfile, setUserProfile] = useState<UserProfile>(() => {
     try {
       const cached = localStorage.getItem('user_profile');
@@ -1095,12 +1440,91 @@ export default function App() {
   );
 
   return (
-    <div className="min-h-screen bg-white text-[#37352f] selection:bg-[#2383e2]/30">
+    <div className="min-h-screen bg-white text-[#37352f] selection:bg-[#2383e2]/30 flex">
+      {/* Sidebar */}
+      <AnimatePresence>
+        {isSidebarOpen && (
+          <>
+            <motion.div 
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              onClick={() => setIsSidebarOpen(false)}
+              className="fixed inset-0 bg-black/20 backdrop-blur-[2px] z-40"
+            />
+            <motion.div 
+              initial={{ x: -280 }}
+              animate={{ x: 0 }}
+              exit={{ x: -280 }}
+              transition={{ type: 'spring', damping: 25, stiffness: 200 }}
+              className="fixed inset-y-0 left-0 w-[280px] bg-white border-r border-[#f1f1ef] z-50 flex flex-col shadow-2xl"
+            >
+              <div className="p-6 border-b border-[#f1f1ef] flex justify-between items-center">
+                <div className="flex items-center gap-3">
+                  <div className="w-8 h-8 rounded-lg bg-black flex items-center justify-center">
+                    <TrendingUp className="w-5 h-5 text-white" />
+                  </div>
+                  <span className="text-sm font-black uppercase tracking-tighter">Vantage</span>
+                </div>
+                <button onClick={() => setIsSidebarOpen(false)} className="p-2 hover:bg-[#f7f6f3] rounded-full transition-colors">
+                  <X className="w-4 h-4 text-[#787774]" />
+                </button>
+              </div>
+
+              <div className="flex-1 p-4 space-y-2">
+                <button 
+                  onClick={() => { setCurrentView('dashboard'); setIsSidebarOpen(false); }}
+                  className={cn(
+                    "w-full flex items-center gap-3 px-4 py-3 rounded-xl transition-all",
+                    currentView === 'dashboard' ? "bg-[#f7f6f3] text-[#37352f]" : "text-[#787774] hover:bg-[#f7f6f3] hover:text-[#37352f]"
+                  )}
+                >
+                  <LayoutDashboard className="w-4 h-4" />
+                  <span className="text-sm font-bold">Dashboard</span>
+                </button>
+                <button 
+                  onClick={() => { setCurrentView('checklist'); setIsSidebarOpen(false); }}
+                  className={cn(
+                    "w-full flex items-center gap-3 px-4 py-3 rounded-xl transition-all",
+                    currentView === 'checklist' ? "bg-[#f7f6f3] text-[#37352f]" : "text-[#787774] hover:bg-[#f7f6f3] hover:text-[#37352f]"
+                  )}
+                >
+                  <ListTodo className="w-4 h-4" />
+                  <span className="text-sm font-bold">Checklist</span>
+                </button>
+              </div>
+
+              <div className="p-6 border-t border-[#f1f1ef]">
+                <div className="flex items-center gap-3 mb-4">
+                  <img src={userProfile.avatar} className="w-8 h-8 rounded-full object-cover border border-[#f1f1ef]" alt="" />
+                  <div>
+                    <p className="text-xs font-bold text-[#37352f]">{userProfile.name}</p>
+                    <p className="text-[10px] text-[#787774]">{userProfile.tradingStyle}</p>
+                  </div>
+                </div>
+                <button 
+                  onClick={() => { setShowProfileModal(true); setIsSidebarOpen(false); }}
+                  className="w-full py-2 text-[10px] font-black text-[#787774] uppercase tracking-widest border border-[#f1f1ef] rounded-lg hover:bg-[#f7f6f3] transition-all"
+                >
+                  Edit Profile
+                </button>
+              </div>
+            </motion.div>
+          </>
+        )}
+      </AnimatePresence>
+
       {/* Main Content */}
-      <main className="flex flex-col overflow-hidden">
+      <main className="flex-1 flex flex-col overflow-hidden relative">
         <PriceMarquee />
         <header className="h-14 border-b border-[#f1f1ef] flex items-center justify-between px-10 shrink-0 bg-white/80 backdrop-blur-md z-10">
           <div className="flex items-center gap-4">
+            <button 
+              onClick={() => setIsSidebarOpen(true)}
+              className="p-2 hover:bg-[#f1f1ef] rounded-lg transition-colors"
+            >
+              <Menu className="w-5 h-5 text-[#37352f]" />
+            </button>
             <h1 className="text-sm font-bold text-[#37352f]">Market Bias Dashboard</h1>
             <div className="h-4 w-px bg-[#f1f1ef]" />
             <div className="flex items-center gap-2 text-[10px] font-medium text-[#787774]">
@@ -1135,33 +1559,37 @@ export default function App() {
         </header>
 
         <div className="flex-1 overflow-y-auto p-10 custom-scrollbar notebook-paper">
-          <div className="max-w-7xl mx-auto">
-            <div className="mb-10">
-              <TypingHeader text={`Welcome ${userProfile.name}`} />
-              <div className="flex items-center gap-3 mt-1">
-                <span className="text-[#787774] text-sm">Real-time synthesis of global financial news and institutional sentiment.</span>
-                <div className="h-3 w-px bg-[#f1f1ef]" />
-                <span className="text-[10px] font-black text-[#2383e2] uppercase tracking-widest font-roboto">{userProfile.tradingStyle} • {userProfile.experience}</span>
+          {currentView === 'dashboard' ? (
+            <div className="max-w-7xl mx-auto">
+              <div className="mb-10">
+                <TypingHeader text={`Welcome ${userProfile.name}`} />
+                <div className="flex items-center gap-3 mt-1">
+                  <span className="text-[#787774] text-sm">Real-time synthesis of global financial news and institutional sentiment.</span>
+                  <div className="h-3 w-px bg-[#f1f1ef]" />
+                  <span className="text-[10px] font-black text-[#2383e2] uppercase tracking-widest font-roboto">{userProfile.tradingStyle} • {userProfile.experience}</span>
+                </div>
+              </div>
+              
+              <div className="bento-grid">
+                {pairs.map((pair, idx) => (
+                  <MarketCard 
+                    key={pair}
+                    pair={pair}
+                    featured={idx === 0}
+                    analysis={analyses[pair]}
+                    isLoading={loadingStates[pair]}
+                    retryStatus={retryStates[pair]}
+                    onRefresh={() => fetchPairData(pair, true)}
+                    onDetails={(analysis) => setSelectedAnalysis(analysis)}
+                    onInsights={(analysis) => setSelectedInsights(analysis)}
+                    onRemove={() => handleRemovePair(pair)}
+                  />
+                ))}
               </div>
             </div>
-            
-            <div className="bento-grid">
-              {pairs.map((pair, idx) => (
-                <MarketCard 
-                  key={pair}
-                  pair={pair}
-                  featured={idx === 0}
-                  analysis={analyses[pair]}
-                  isLoading={loadingStates[pair]}
-                  retryStatus={retryStates[pair]}
-                  onRefresh={() => fetchPairData(pair, true)}
-                  onDetails={(analysis) => setSelectedAnalysis(analysis)}
-                  onInsights={(analysis) => setSelectedInsights(analysis)}
-                  onRemove={() => handleRemovePair(pair)}
-                />
-              ))}
-            </div>
-          </div>
+          ) : (
+            <Checklist />
+          )}
         </div>
       </main>
 
