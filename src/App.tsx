@@ -993,36 +993,83 @@ interface Strategy {
   };
 }
 
-const ChecklistItem = ({ text, completed, onToggle, onDelete }: { text: string, completed: boolean, onToggle: () => void, onDelete: () => void }) => (
-  <div className="group relative">
-    <button 
-      onClick={onToggle}
-      className={cn(
-        "w-full flex items-center gap-3 p-4 rounded-xl border transition-all text-left",
-        completed 
-          ? "bg-[#f7f6f3] border-[#f1f1ef] text-[#787774]" 
-          : "bg-white border-[#f1f1ef] text-[#37352f] hover:border-[#2383e2]/30 hover:shadow-sm"
-      )}
-    >
+const ChecklistItem = ({ text, completed, onToggle, onDelete, onUpdate }: { 
+  text: string, 
+  completed: boolean, 
+  onToggle: () => void, 
+  onDelete: () => void,
+  onUpdate: (newText: string) => void
+}) => {
+  const [isEditing, setIsEditing] = useState(false);
+  const [editText, setEditText] = useState(text);
+
+  const handleBlur = () => {
+    setIsEditing(false);
+    if (editText.trim() && editText.trim() !== text) {
+      onUpdate(editText.trim());
+    } else {
+      setEditText(text);
+    }
+  };
+
+  const handleKeyDown = (e: React.KeyboardEvent) => {
+    if (e.key === 'Enter') {
+      handleBlur();
+    } else if (e.key === 'Escape') {
+      setIsEditing(false);
+      setEditText(text);
+    }
+  };
+
+  return (
+    <div className="group relative">
       <div className={cn(
-        "w-5 h-5 rounded-full border flex items-center justify-center transition-all",
-        completed ? "bg-[#2383e2] border-[#2383e2]" : "bg-white border-[#f1f1ef] group-hover:border-[#2383e2]"
+        "w-full flex items-center gap-3 p-4 rounded-xl transition-all text-left",
+        completed 
+          ? "bg-[#f7f6f3] text-[#787774]" 
+          : "bg-white text-[#37352f] hover:shadow-sm"
       )}>
-        {completed && <CheckCircle2 className="w-3.5 h-3.5 text-white" />}
+        <button 
+          onClick={onToggle}
+          className={cn(
+            "w-5 h-5 rounded-full border flex items-center justify-center transition-all flex-shrink-0",
+            completed ? "bg-[#2383e2] border-[#2383e2]" : "bg-white border-[#f1f1ef] group-hover:border-[#2383e2]"
+          )}
+        >
+          {completed && <CheckCircle2 className="w-3.5 h-3.5 text-white" />}
+        </button>
+        
+        {isEditing ? (
+          <input
+            type="text"
+            value={editText}
+            onChange={(e) => setEditText(e.target.value)}
+            onBlur={handleBlur}
+            onKeyDown={handleKeyDown}
+            autoFocus
+            className="flex-1 bg-transparent text-sm font-medium focus:outline-none border-b border-[#2383e2]"
+          />
+        ) : (
+          <span 
+            onClick={() => setIsEditing(true)}
+            className={cn("text-sm font-medium pr-8 flex-1 cursor-text", completed && "line-through opacity-60")}
+          >
+            {text}
+          </span>
+        )}
       </div>
-      <span className={cn("text-sm font-medium pr-8", completed && "line-through opacity-60")}>{text}</span>
-    </button>
-    <button 
-      onClick={(e) => {
-        e.stopPropagation();
-        onDelete();
-      }}
-      className="absolute right-3 top-1/2 -translate-y-1/2 p-2 text-[#787774] opacity-0 group-hover:opacity-100 hover:text-red-500 transition-all"
-    >
-      <Trash2 className="w-4 h-4" />
-    </button>
-  </div>
-);
+      <button 
+        onClick={(e) => {
+          e.stopPropagation();
+          onDelete();
+        }}
+        className="absolute right-3 top-1/2 -translate-y-1/2 p-2 text-[#787774] opacity-0 group-hover:opacity-100 hover:text-red-500 transition-all"
+      >
+        <Trash2 className="w-4 h-4" />
+      </button>
+    </div>
+  );
+};
 
 const Checklist = () => {
   const [strategies, setStrategies] = useState<Strategy[]>(() => {
@@ -1116,6 +1163,23 @@ const Checklist = () => {
           categories: {
             ...s.categories,
             [activeTab]: s.categories[activeTab].filter(item => item.id !== itemId)
+          }
+        };
+      }
+      return s;
+    }));
+  };
+
+  const updateItem = (itemId: string, newText: string) => {
+    setStrategies(strategies.map(s => {
+      if (s.id === activeStrategyId) {
+        return {
+          ...s,
+          categories: {
+            ...s.categories,
+            [activeTab]: s.categories[activeTab].map(item => 
+              item.id === itemId ? { ...item, text: newText } : item
+            )
           }
         };
       }
@@ -1246,10 +1310,21 @@ const Checklist = () => {
         <div className="p-8 flex-1">
           <div className="space-y-3">
             {activeStrategy?.categories[activeTab].length === 0 ? (
-              <div className="py-20 text-center border-2 border-dashed border-[#f1f1ef] rounded-2xl">
-                <p className="text-sm text-[#787774]">No items in this category yet.</p>
-                <p className="text-xs text-[#a1a19f] mt-1">Add your first criteria below.</p>
-              </div>
+              <button 
+                onClick={() => setShowAddItemModal(true)}
+                className="w-full flex items-center gap-3 p-4 rounded-xl bg-[#f7f6f3] opacity-40 hover:opacity-80 transition-all text-left group cursor-pointer"
+              >
+                <div className="w-5 h-5 rounded-full border border-[#f1f1ef] flex items-center justify-center bg-white group-hover:border-[#2383e2] flex-shrink-0">
+                  <Plus className="w-3 h-3 text-[#787774] group-hover:text-[#2383e2]" />
+                </div>
+                <span className="text-sm font-medium text-[#787774] group-hover:text-[#37352f]">
+                  {activeTab === "Trading System" 
+                    ? "Example: Identify higher timeframe market structure (Bullish/Bearish)" 
+                    : activeTab === "Trade Management"
+                    ? "Example: Take partial profits at 1:2 Risk/Reward level"
+                    : "Example: Risk maximum 1% of total account balance"}
+                </span>
+              </button>
             ) : (
               activeStrategy?.categories[activeTab].map((item) => (
                 <ChecklistItem 
@@ -1258,6 +1333,7 @@ const Checklist = () => {
                   completed={item.completed} 
                   onToggle={() => toggleItem(item.id)} 
                   onDelete={() => deleteItem(item.id)}
+                  onUpdate={(newText) => updateItem(item.id, newText)}
                 />
               ))
             )}
@@ -1313,6 +1389,109 @@ const Checklist = () => {
         )}
       </AnimatePresence>
     </div>
+  );
+};
+
+const CustomCursor = () => {
+  const [mousePos, setMousePos] = useState({ x: -100, y: -100 });
+  const [isHovering, setIsHovering] = useState(false);
+  const [isPressed, setIsPressed] = useState(false);
+  const [isVisible, setIsVisible] = useState(false);
+
+  useEffect(() => {
+    const handleMouseMove = (e: MouseEvent) => {
+      setMousePos({ x: e.clientX, y: e.clientY });
+      if (!isVisible) setIsVisible(true);
+    };
+
+    const handleMouseOver = (e: MouseEvent) => {
+      const target = e.target as HTMLElement;
+      const isInteractive = target.closest('button, a, input, select, textarea, [role="button"], .cursor-pointer');
+      setIsHovering(!!isInteractive);
+    };
+
+    const handleMouseDown = () => setIsPressed(true);
+    const handleMouseUp = () => setIsPressed(false);
+    const handleMouseLeave = () => setIsVisible(false);
+    const handleMouseEnter = () => setIsVisible(true);
+
+    window.addEventListener('mousemove', handleMouseMove, { passive: true });
+    window.addEventListener('mouseover', handleMouseOver);
+    window.addEventListener('mousedown', handleMouseDown);
+    window.addEventListener('mouseup', handleMouseUp);
+    document.addEventListener('mouseleave', handleMouseLeave);
+    document.addEventListener('mouseenter', handleMouseEnter);
+
+    return () => {
+      window.removeEventListener('mousemove', handleMouseMove);
+      window.removeEventListener('mouseover', handleMouseOver);
+      window.removeEventListener('mousedown', handleMouseDown);
+      window.removeEventListener('mouseup', handleMouseUp);
+      document.removeEventListener('mouseleave', handleMouseLeave);
+      document.removeEventListener('mouseenter', handleMouseEnter);
+    };
+  }, [isVisible]);
+
+  if (!isVisible) return null;
+
+  return (
+    <>
+      {/* Main Pointer (macOS style arrow) */}
+      <motion.div
+        className="fixed top-0 left-0 z-[10000] pointer-events-none"
+        style={{ 
+          x: mousePos.x, 
+          y: mousePos.y,
+          translateX: '-2px',
+          translateY: '-2px'
+        }}
+        animate={{
+          scale: isPressed ? 0.9 : 1,
+        }}
+        transition={{ type: "spring", damping: 30, stiffness: 400, mass: 0.5 }}
+      >
+        <svg 
+          width="20" 
+          height="20" 
+          viewBox="0 0 24 24" 
+          fill="none" 
+          xmlns="http://www.w3.org/2000/svg"
+        >
+          <path 
+            d="M4.5 3.5L18.5 11.5L12.5 12.5L11.5 18.5L4.5 3.5Z" 
+            fill="black" 
+            stroke="white" 
+            strokeWidth="2"
+            strokeLinejoin="round"
+          />
+        </svg>
+      </motion.div>
+
+      {/* Trailing Ring (Figma/Modern feel) */}
+      <motion.div
+        className="fixed top-0 left-0 z-[9999] pointer-events-none"
+        animate={{
+          x: mousePos.x,
+          y: mousePos.y,
+          scale: isHovering ? 1.4 : 0,
+          opacity: isHovering ? 0.2 : 0,
+        }}
+        transition={{
+          type: "spring",
+          damping: 25,
+          stiffness: 200,
+          mass: 0.6
+        }}
+        style={{
+          width: 20,
+          height: 20,
+          borderRadius: '50%',
+          backgroundColor: '#2383e2',
+          marginLeft: -10,
+          marginTop: -10,
+        }}
+      />
+    </>
   );
 };
 
@@ -1457,16 +1636,16 @@ export default function App() {
               animate={{ x: 0 }}
               exit={{ x: -280 }}
               transition={{ type: 'spring', damping: 25, stiffness: 200 }}
-              className="fixed inset-y-0 left-0 w-[280px] bg-white border-r border-[#f1f1ef] z-50 flex flex-col shadow-2xl"
+              className="fixed inset-y-0 left-0 w-[280px] fractal-glass z-50 flex flex-col shadow-2xl"
             >
-              <div className="p-6 border-b border-[#f1f1ef] flex justify-between items-center">
+              <div className="p-6 border-b border-white/10 flex justify-between items-center">
                 <div className="flex items-center gap-3">
                   <div className="w-8 h-8 rounded-lg bg-black flex items-center justify-center">
                     <TrendingUp className="w-5 h-5 text-white" />
                   </div>
                   <span className="text-sm font-black uppercase tracking-tighter">Vantage</span>
                 </div>
-                <button onClick={() => setIsSidebarOpen(false)} className="p-2 hover:bg-[#f7f6f3] rounded-full transition-colors">
+                <button onClick={() => setIsSidebarOpen(false)} className="p-2 hover:bg-white/20 rounded-full transition-colors">
                   <X className="w-4 h-4 text-[#787774]" />
                 </button>
               </div>
@@ -1476,7 +1655,7 @@ export default function App() {
                   onClick={() => { setCurrentView('dashboard'); setIsSidebarOpen(false); }}
                   className={cn(
                     "w-full flex items-center gap-3 px-4 py-3 rounded-xl transition-all",
-                    currentView === 'dashboard' ? "bg-[#f7f6f3] text-[#37352f]" : "text-[#787774] hover:bg-[#f7f6f3] hover:text-[#37352f]"
+                    currentView === 'dashboard' ? "bg-white/40 text-[#37352f] shadow-sm" : "text-[#787774] hover:bg-white/20 hover:text-[#37352f]"
                   )}
                 >
                   <LayoutDashboard className="w-4 h-4" />
@@ -1486,7 +1665,7 @@ export default function App() {
                   onClick={() => { setCurrentView('checklist'); setIsSidebarOpen(false); }}
                   className={cn(
                     "w-full flex items-center gap-3 px-4 py-3 rounded-xl transition-all",
-                    currentView === 'checklist' ? "bg-[#f7f6f3] text-[#37352f]" : "text-[#787774] hover:bg-[#f7f6f3] hover:text-[#37352f]"
+                    currentView === 'checklist' ? "bg-white/40 text-[#37352f] shadow-sm" : "text-[#787774] hover:bg-white/20 hover:text-[#37352f]"
                   )}
                 >
                   <ListTodo className="w-4 h-4" />
@@ -1494,9 +1673,9 @@ export default function App() {
                 </button>
               </div>
 
-              <div className="p-6 border-t border-[#f1f1ef]">
+              <div className="p-6 border-t border-white/10">
                 <div className="flex items-center gap-3 mb-4">
-                  <img src={userProfile.avatar} className="w-8 h-8 rounded-full object-cover border border-[#f1f1ef]" alt="" />
+                  <img src={userProfile.avatar} className="w-8 h-8 rounded-full object-cover border border-white/20" alt="" />
                   <div>
                     <p className="text-xs font-bold text-[#37352f]">{userProfile.name}</p>
                     <p className="text-[10px] text-[#787774]">{userProfile.tradingStyle}</p>
@@ -1504,7 +1683,7 @@ export default function App() {
                 </div>
                 <button 
                   onClick={() => { setShowProfileModal(true); setIsSidebarOpen(false); }}
-                  className="w-full py-2 text-[10px] font-black text-[#787774] uppercase tracking-widest border border-[#f1f1ef] rounded-lg hover:bg-[#f7f6f3] transition-all"
+                  className="w-full py-2 text-[10px] font-black text-[#787774] uppercase tracking-widest border border-white/20 rounded-lg hover:bg-white/20 transition-all"
                 >
                   Edit Profile
                 </button>
@@ -1717,6 +1896,8 @@ export default function App() {
           />
         )}
       </AnimatePresence>
+
+      <CustomCursor />
     </div>
   );
 }
