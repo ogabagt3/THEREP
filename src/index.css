@@ -3,6 +3,7 @@
 
 @theme {
   --font-sans: "Roboto", ui-sans-serif, system-ui, sans-serif;
+  --font-roboto: "Roboto", sans-serif;
   --font-display: "Roboto", sans-serif;
   --font-serif: "Libre Baskerville", serif;
   --font-mono: "JetBrains Mono", ui-monospace, SFMono-Regular, monospace;

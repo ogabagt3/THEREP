@@ -3,8 +3,10 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
+import Cropper from 'react-easy-crop';
+import getCroppedImg from './utils/cropImage';
 import { 
   ArrowUp,
   ArrowDown,
@@ -23,7 +25,11 @@ import {
   Maximize2,
   Minimize2,
   X,
-  Trash2
+  Trash2,
+  User,
+  Settings,
+  ChevronDown,
+  Camera
 } from 'lucide-react';
 import { analyzeMarket, PairAnalysis } from './services/geminiService';
 import { fetchRealTimePrice, fetchNewsHeadlines, PriceData, NewsHeadline } from './services/marketDataService';
@@ -44,6 +50,230 @@ const INITIAL_PAIRS = [
   'US100',
   'US30'
 ];
+
+interface UserProfile {
+  name: string;
+  avatar: string;
+  tradingStyle: string;
+  experience: string;
+}
+
+const DEFAULT_PROFILE: UserProfile = {
+  name: 'Trader',
+  avatar: 'https://picsum.photos/seed/trader/200/200',
+  tradingStyle: 'Day Trader',
+  experience: 'Intermediate'
+};
+
+const ProfileModal = ({ profile, onSave, onClose }: { profile: UserProfile, onSave: (p: UserProfile) => void, onClose: () => void }) => {
+  const [editedProfile, setEditedProfile] = useState<UserProfile>(profile);
+  const [imageToCrop, setImageToCrop] = useState<string | null>(null);
+  const [crop, setCrop] = useState({ x: 0, y: 0 });
+  const [zoom, setZoom] = useState(1);
+  const [croppedAreaPixels, setCroppedAreaPixels] = useState<any>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
+  const onCropComplete = useCallback((_croppedArea: any, croppedAreaPixels: any) => {
+    setCroppedAreaPixels(croppedAreaPixels);
+  }, []);
+
+  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) {
+      const reader = new FileReader();
+      reader.onloadend = () => {
+        setImageToCrop(reader.result as string);
+      };
+      reader.readAsDataURL(file);
+    }
+  };
+
+  const handleCropSave = async () => {
+    try {
+      if (imageToCrop && croppedAreaPixels) {
+        const croppedImage = await getCroppedImg(imageToCrop, croppedAreaPixels);
+        if (croppedImage) {
+          setEditedProfile({ ...editedProfile, avatar: croppedImage });
+          setImageToCrop(null);
+        }
+      }
+    } catch (e) {
+      console.error(e);
+    }
+  };
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+      <motion.div 
+        initial={{ opacity: 0 }}
+        animate={{ opacity: 1 }}
+        exit={{ opacity: 0 }}
+        onClick={onClose}
+        className="absolute inset-0 bg-black/40 backdrop-blur-[2px]"
+      />
+      <motion.div 
+        initial={{ opacity: 0, scale: 0.98, y: 10 }}
+        animate={{ opacity: 1, scale: 1, y: 0 }}
+        exit={{ opacity: 0, scale: 0.98, y: 10 }}
+        className="relative w-full max-w-md bg-white border border-[#f1f1ef] rounded-lg overflow-hidden shadow-2xl flex flex-col font-roboto"
+      >
+        <div className="p-6 border-b border-[#f1f1ef] flex justify-between items-center bg-[#f7f6f3]">
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 rounded-full bg-[#2383e2] flex items-center justify-center">
+              <User className="w-5 h-5 text-white" />
+            </div>
+            <div>
+              <h2 className="text-lg font-bold text-[#37352f]">Edit Profile</h2>
+              <p className="text-[10px] font-mono text-[#787774] uppercase tracking-widest">Personalize your dashboard</p>
+            </div>
+          </div>
+          <button onClick={onClose} className="p-2 hover:bg-[#f1f1ef] rounded-full transition-colors">
+            <X className="w-5 h-5 text-[#787774]" />
+          </button>
+        </div>
+
+        <div className="p-8 space-y-6">
+          {imageToCrop ? (
+            <div className="space-y-4">
+              <div className="relative h-64 w-full bg-[#f1f1ef] rounded-lg overflow-hidden">
+                <Cropper
+                  image={imageToCrop}
+                  crop={crop}
+                  zoom={zoom}
+                  aspect={1}
+                  cropShape="round"
+                  showGrid={false}
+                  onCropChange={setCrop}
+                  onCropComplete={onCropComplete}
+                  onZoomChange={setZoom}
+                />
+              </div>
+              <div className="space-y-2">
+                <label className="text-[10px] font-black text-[#37352f] uppercase tracking-widest">Zoom</label>
+                <input
+                  type="range"
+                  value={zoom}
+                  min={1}
+                  max={3}
+                  step={0.1}
+                  aria-labelledby="Zoom"
+                  onChange={(e) => setZoom(Number(e.target.value))}
+                  className="w-full h-1.5 bg-[#f1f1ef] rounded-lg appearance-none cursor-pointer accent-black"
+                />
+              </div>
+              <div className="flex gap-2">
+                <button 
+                  onClick={() => setImageToCrop(null)}
+                  className="flex-1 py-2 text-sm font-medium text-[#787774] hover:bg-[#f1f1ef] rounded transition-colors border border-[#f1f1ef]"
+                >
+                  Cancel
+                </button>
+                <button 
+                  onClick={handleCropSave}
+                  className="flex-1 py-2 text-sm font-medium bg-black text-white rounded hover:bg-[#37352f] transition-colors"
+                >
+                  Apply Crop
+                </button>
+              </div>
+            </div>
+          ) : (
+            <>
+              <div className="flex flex-col items-center gap-4">
+                <div className="relative group">
+                  <img 
+                    src={editedProfile.avatar} 
+                    alt="Avatar" 
+                    className="w-24 h-24 rounded-full border-4 border-[#f1f1ef] object-cover"
+                    referrerPolicy="no-referrer"
+                  />
+                  <input 
+                    type="file" 
+                    ref={fileInputRef} 
+                    onChange={handleFileChange} 
+                    className="hidden" 
+                    accept="image/*"
+                  />
+                  <div className="absolute bottom-0 right-0">
+                    <button 
+                      onClick={() => fileInputRef.current?.click()}
+                      className="p-2 bg-black text-white rounded-full shadow-lg hover:bg-[#37352f] transition-all"
+                      title="Upload Photo"
+                    >
+                      <Camera className="w-4 h-4" />
+                    </button>
+                  </div>
+                </div>
+              </div>
+
+              <div className="space-y-4">
+                <div className="space-y-1.5">
+                  <label className="text-[10px] font-black text-[#37352f] uppercase tracking-widest">Display Name</label>
+                  <input 
+                    type="text" 
+                    value={editedProfile.name}
+                    onChange={(e) => setEditedProfile({...editedProfile, name: e.target.value})}
+                    className="w-full bg-white border border-[#f1f1ef] rounded-lg px-4 py-2.5 text-sm focus:ring-2 focus:ring-[#2383e2]/20 transition-all outline-none shadow-sm"
+                  />
+                </div>
+
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="space-y-1.5">
+                    <label className="text-[10px] font-black text-[#37352f] uppercase tracking-widest">Trading Style</label>
+                    <div className="relative">
+                      <select 
+                        value={editedProfile.tradingStyle}
+                        onChange={(e) => setEditedProfile({...editedProfile, tradingStyle: e.target.value})}
+                        className="w-full bg-white border border-[#f1f1ef] rounded-lg px-4 py-2.5 text-sm focus:ring-2 focus:ring-[#2383e2]/20 transition-all appearance-none outline-none shadow-sm"
+                      >
+                        <option>Day Trader</option>
+                        <option>Swing Trader</option>
+                        <option>Scalper</option>
+                        <option>Position Trader</option>
+                      </select>
+                      <ChevronDown className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-[#787774] pointer-events-none" />
+                    </div>
+                  </div>
+
+                  <div className="space-y-1.5">
+                    <label className="text-[10px] font-black text-[#37352f] uppercase tracking-widest">Experience</label>
+                    <div className="relative">
+                      <select 
+                        value={editedProfile.experience}
+                        onChange={(e) => setEditedProfile({...editedProfile, experience: e.target.value})}
+                        className="w-full bg-white border border-[#f1f1ef] rounded-lg px-4 py-2.5 text-sm focus:ring-2 focus:ring-[#2383e2]/20 transition-all appearance-none outline-none shadow-sm"
+                      >
+                        <option>Beginner</option>
+                        <option>Intermediate</option>
+                        <option>Advanced</option>
+                        <option>Institutional</option>
+                      </select>
+                      <ChevronDown className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-[#787774] pointer-events-none" />
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </>
+          )}
+        </div>
+
+        <div className="p-6 bg-[#f7f6f3] border-t border-[#f1f1ef] flex gap-3">
+          <button 
+            onClick={onClose}
+            className="flex-1 py-2.5 rounded-xl bg-white border border-[#f1f1ef] text-[#787774] text-[11px] font-bold uppercase tracking-wider transition-all hover:bg-[#f1f1ef]"
+          >
+            Cancel
+          </button>
+          <button 
+            onClick={() => onSave(editedProfile)}
+            className="flex-1 py-2.5 rounded-xl bg-black text-white text-[11px] font-bold uppercase tracking-wider transition-all hover:bg-[#37352f]"
+          >
+            Save Changes
+          </button>
+        </div>
+      </motion.div>
+    </div>
+  );
+};
 
 const TypingHeader = ({ text }: { text: string }) => {
   const capitalizedText = text.charAt(0).toUpperCase() + text.slice(1);
@@ -146,7 +376,7 @@ const PriceMarquee = () => {
         <div className="flex gap-6 px-3">
           {[...prices, ...prices, ...prices, ...prices].map((price, i) => (
             <div key={i} className="flex items-center gap-3 border border-black rounded-xl px-4 py-2 bg-white shadow-sm shrink-0">
-              <span className="text-[10px] font-bold tracking-widest uppercase text-[#787774]">{price.symbol}</span>
+              <span className="text-[10px] font-black tracking-widest uppercase text-[#37352f]">{price.symbol}</span>
               <span className="text-xs font-mono font-bold text-[#37352f]">{price.price}</span>
               <span className={cn(
                 "text-[10px] font-bold px-1.5 py-0.5 rounded",
@@ -183,12 +413,13 @@ const MarketCard = ({ analysis, pair, onRefresh, onRemove, onDetails, onInsights
       }}
       initial={{ opacity: 0, y: 10 }}
       animate={{ opacity: 1, y: 0 }}
-      onClick={() => isMinimized && setIsMinimized(false)}
+      onClick={() => setIsMinimized(!isMinimized)}
       className={cn(
-        "notion-card relative flex flex-col gap-4 group cursor-pointer overflow-hidden",
+        "notion-card relative flex flex-col gap-4 group cursor-pointer overflow-hidden transition-shadow duration-300",
         isMinimized ? "p-4 h-auto" : "p-6 h-full",
         !isMinimized && "shadow-xl border-[#2383e2]/20 ring-1 ring-[#2383e2]/5",
-        !isMinimized && "bento-featured"
+        !isMinimized && "bento-featured",
+        isMinimized && "hover:shadow-md hover:border-[#37352f]/20"
       )}
     >
       <motion.div layout className="flex justify-between items-start">
@@ -205,7 +436,7 @@ const MarketCard = ({ analysis, pair, onRefresh, onRemove, onDetails, onInsights
                 className="flex items-center gap-2 mt-0.5"
               >
                 {analysis && (
-                  <span className={cn("text-[10px] font-bold uppercase px-1.5 py-0.5 rounded border tracking-wider", getBiasColor(analysis.bias))}>
+                  <span className={cn("text-[10px] font-black uppercase px-1.5 py-0.5 rounded border tracking-wider", getBiasColor(analysis.bias))}>
                     {analysis.bias}
                   </span>
                 )}
@@ -227,16 +458,6 @@ const MarketCard = ({ analysis, pair, onRefresh, onRemove, onDetails, onInsights
               <Trash2 className="w-2 h-2 text-[#4c0000]" />
             </button>
           )}
-          
-          {!isMinimized && (
-            <button 
-              onClick={(e) => { e.stopPropagation(); setIsMinimized(true); }}
-              className="w-3.5 h-3.5 rounded-full bg-[#e1e1e1] hover:bg-[#d4d4d4] transition-all shadow-sm flex items-center justify-center group/btn"
-              title="Minimize"
-            >
-              <Minimize2 className="w-2 h-2 text-[#5f5f5f]" />
-            </button>
-          )}
         </motion.div>
       </motion.div>
 
@@ -245,7 +466,7 @@ const MarketCard = ({ analysis, pair, onRefresh, onRemove, onDetails, onInsights
           <BrainCircuit className="w-6 h-6 text-[#2383e2] animate-pulse" />
           {!isMinimized && (
             <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="flex flex-col items-center gap-1">
-              <span className="text-[10px] font-mono text-[#787774] uppercase tracking-widest">Synthesizing...</span>
+              <span className="text-[10px] font-mono text-[#37352f] font-black uppercase tracking-widest">Synthesizing...</span>
               {retryStatus && (
                 <span className="text-[8px] font-mono text-[#de350b] uppercase tracking-tighter animate-pulse">
                   Rate Limit Hit: Retrying ({retryStatus.attempt}/5)
@@ -288,7 +509,7 @@ const MarketCard = ({ analysis, pair, onRefresh, onRemove, onDetails, onInsights
                       "flex-1 border border-black rounded-xl flex items-center justify-center gap-2 bg-white shadow-sm transition-all",
                       isMinimized ? "p-2" : "p-3"
                     )}>
-                      <motion.span layout className="text-[10px] font-bold text-[#787774] uppercase tracking-wider">{base}</motion.span>
+                      <motion.span layout className="text-[10px] font-black text-[#37352f] uppercase tracking-wider">{base}</motion.span>
                       <motion.div layout>
                         {isBullish ? (
                           <ArrowUp className="w-4 h-4 text-[#00875a]" />
@@ -304,7 +525,7 @@ const MarketCard = ({ analysis, pair, onRefresh, onRemove, onDetails, onInsights
                         "flex-1 border border-black rounded-xl flex items-center justify-center gap-2 bg-white shadow-sm transition-all",
                         isMinimized ? "p-2" : "p-3"
                       )}>
-                        <motion.span layout className="text-[10px] font-bold text-[#787774] uppercase tracking-wider">{quote}</motion.span>
+                        <motion.span layout className="text-[10px] font-black text-[#37352f] uppercase tracking-wider">{quote}</motion.span>
                         <motion.div layout>
                           {isBullish ? (
                             <ArrowDown className="w-4 h-4 text-[#de350b]" />
@@ -339,14 +560,14 @@ const MarketCard = ({ analysis, pair, onRefresh, onRemove, onDetails, onInsights
                     )}>
                       {analysis.change}
                     </span>
-                    <span className="text-[#787774]">Updated {analysis.lastUpdate}</span>
+                    <span className="text-[#37352f]">Updated {analysis.lastUpdate}</span>
                   </div>
                 </div>
 
                 <div className="flex flex-col gap-2">
                   <button 
                     onClick={(e) => { e.stopPropagation(); setIsExpanded(!isExpanded); }}
-                    className="flex items-center justify-between w-full text-[10px] font-bold text-[#787774] uppercase tracking-wider border-b border-[#f1f1ef] pb-1.5 group/header"
+                    className="flex items-center justify-between w-full text-[10px] font-black text-[#37352f] uppercase tracking-wider border-b border-[#f1f1ef] pb-1.5 group/header"
                   >
                     <span>Key Drivers</span>
                     <ChevronRight className={cn("w-3 h-3 transition-transform duration-300", isExpanded && "rotate-90")} />
@@ -385,38 +606,39 @@ const MarketCard = ({ analysis, pair, onRefresh, onRemove, onDetails, onInsights
                   </button>
                 </div>
 
-                {/* Inline Confirmation */}
-                <AnimatePresence>
-                  {showConfirmDelete && (
-                    <motion.div 
-                      initial={{ opacity: 0, scale: 0.95 }}
-                      animate={{ opacity: 1, scale: 1 }}
-                      exit={{ opacity: 0, scale: 0.95 }}
-                      className="absolute inset-0 z-30 bg-white/95 backdrop-blur-sm flex flex-col items-center justify-center p-6 text-center rounded-xl border border-black shadow-2xl"
-                      onClick={(e) => e.stopPropagation()}
-                    >
-                      <div className="w-12 h-12 rounded-full bg-[#ffebe6] flex items-center justify-center mb-4">
-                        <Trash2 className="w-6 h-6 text-[#de350b]" />
-                      </div>
-                      <h4 className="text-base font-bold text-[#37352f] mb-1">Remove {pair}?</h4>
-                      <p className="text-[10px] text-[#787774] mb-6 uppercase tracking-widest font-bold">This action cannot be undone.</p>
-                      <div className="flex gap-3 w-full max-w-[200px]">
-                        <button 
-                          onClick={() => setShowConfirmDelete(false)}
-                          className="flex-1 py-2.5 rounded-xl bg-white border border-black text-black text-[11px] font-bold uppercase tracking-wider transition-all hover:bg-[#f7f6f3]"
-                        >
-                          No
-                        </button>
-                        <button 
-                          onClick={() => { onRemove?.(); setShowConfirmDelete(false); }}
-                          className="flex-1 py-2.5 rounded-xl bg-black text-white text-[11px] font-bold uppercase tracking-wider transition-all hover:bg-[#37352f]"
-                        >
-                          Yes
-                        </button>
-                      </div>
-                    </motion.div>
-                  )}
-                </AnimatePresence>
+                {/* Inline Confirmation moved inside the main card container but outside the expanded block */}
+              </motion.div>
+            )}
+          </AnimatePresence>
+
+          <AnimatePresence>
+            {showConfirmDelete && (
+              <motion.div 
+                initial={{ opacity: 0, scale: 0.95 }}
+                animate={{ opacity: 1, scale: 1 }}
+                exit={{ opacity: 0, scale: 0.95 }}
+                className="absolute inset-0 z-30 bg-white/95 backdrop-blur-sm flex flex-col items-center justify-center p-6 text-center rounded-xl border border-black shadow-2xl"
+                onClick={(e) => e.stopPropagation()}
+              >
+                <div className="w-12 h-12 rounded-full bg-[#ffebe6] flex items-center justify-center mb-4">
+                  <Trash2 className="w-6 h-6 text-[#de350b]" />
+                </div>
+                <h4 className="text-base font-bold text-[#37352f] mb-1">Remove {pair}?</h4>
+                <p className="text-[10px] text-[#37352f] mb-6 uppercase tracking-widest font-black">This action cannot be undone.</p>
+                <div className="flex gap-3 w-full max-w-[200px]">
+                  <button 
+                    onClick={() => setShowConfirmDelete(false)}
+                    className="flex-1 py-2.5 rounded-xl bg-white border border-black text-black text-[11px] font-bold uppercase tracking-wider transition-all hover:bg-[#f7f6f3]"
+                  >
+                    No
+                  </button>
+                  <button 
+                    onClick={() => { onRemove?.(); setShowConfirmDelete(false); }}
+                    className="flex-1 py-2.5 rounded-xl bg-black text-white text-[11px] font-bold uppercase tracking-wider transition-all hover:bg-[#37352f]"
+                  >
+                    Yes
+                  </button>
+                </div>
               </motion.div>
             )}
           </AnimatePresence>
@@ -472,7 +694,7 @@ const DetailsModal = ({ analysis, onClose }: { analysis: PairAnalysis, onClose: 
             </div>
             <div>
               <h2 className="text-xl font-bold text-[#37352f]">{analysis.pair} Deep Analysis</h2>
-              <p className="text-[10px] font-mono text-[#787774] uppercase tracking-widest">Institutional Intelligence Report</p>
+              <p className="text-[10px] font-mono text-[#37352f] font-black uppercase tracking-widest">Institutional Intelligence Report</p>
             </div>
           </div>
           <button onClick={onClose} className="p-2 hover:bg-[#f1f1ef] rounded-full transition-colors">
@@ -486,7 +708,7 @@ const DetailsModal = ({ analysis, onClose }: { analysis: PairAnalysis, onClose: 
             <div className="space-y-4">
               <div className="flex justify-between items-end">
                 <div className="space-y-1">
-                  <h4 className="text-[10px] font-bold text-[#787774] uppercase tracking-widest">AI Confidence Score</h4>
+                  <h4 className="text-[10px] font-black text-[#37352f] uppercase tracking-widest">AI Confidence Score</h4>
                   <div className="text-3xl font-bold text-[#37352f]">{analysis.confidence}%</div>
                 </div>
                 <div className={cn(
@@ -515,7 +737,7 @@ const DetailsModal = ({ analysis, onClose }: { analysis: PairAnalysis, onClose: 
             <div className="grid grid-cols-1 md:grid-cols-3 gap-10">
               {/* Left Column: Key Drivers */}
               <div className="md:col-span-1 space-y-4">
-                <h4 className="text-[10px] font-bold text-[#787774] uppercase tracking-widest flex items-center gap-2">
+                <h4 className="text-[10px] font-black text-[#37352f] uppercase tracking-widest flex items-center gap-2">
                   <BrainCircuit className="w-3.5 h-3.5" />
                   Key Drivers
                 </h4>
@@ -532,7 +754,7 @@ const DetailsModal = ({ analysis, onClose }: { analysis: PairAnalysis, onClose: 
               {/* Right Column: News Bullet Points */}
               <div className="md:col-span-2 space-y-8">
                 <div className="space-y-4">
-                  <h4 className="text-[10px] font-bold text-[#787774] uppercase tracking-widest flex items-center gap-2">
+                  <h4 className="text-[10px] font-black text-[#37352f] uppercase tracking-widest flex items-center gap-2">
                     <FileText className="w-3.5 h-3.5" />
                     Market Intelligence (AI Synthesized)
                   </h4>
@@ -586,7 +808,7 @@ const DetailsModal = ({ analysis, onClose }: { analysis: PairAnalysis, onClose: 
 
                 {/* NewsAPI Headlines Section */}
                 <div className="space-y-4 pt-6 border-t border-[#f1f1ef]">
-                  <h4 className="text-[10px] font-bold text-[#787774] uppercase tracking-widest flex items-center gap-2">
+                  <h4 className="text-[10px] font-black text-[#37352f] uppercase tracking-widest flex items-center gap-2">
                     <Globe className="w-3.5 h-3.5" />
                     Latest Headlines (NewsAPI)
                   </h4>
@@ -685,17 +907,17 @@ const InsightsModal = ({ analysis, onClose }: { analysis: PairAnalysis, onClose:
                   analysis.bias === 'bullish' ? "bg-[#00875a]" : 
                   analysis.bias === 'bearish' ? "bg-[#de350b]" : "bg-[#37352f]"
                 )} />
-                <span className="text-xs font-bold text-[#37352f] uppercase tracking-wider">{analysis.bias} Bias</span>
+                <span className="text-xs font-black text-[#37352f] uppercase tracking-wider">{analysis.bias} Bias</span>
               </div>
               <div className="flex items-center gap-2">
-                <span className="text-[10px] font-bold text-[#787774] uppercase tracking-widest">AI Confidence</span>
+                <span className="text-[10px] font-black text-[#37352f] uppercase tracking-widest">AI Confidence</span>
                 <span className="text-sm font-bold text-[#37352f]">{analysis.confidence}%</span>
               </div>
             </div>
 
             <div className="space-y-6">
               <div className="space-y-4">
-                <h4 className="text-[10px] font-bold text-[#787774] uppercase tracking-widest flex items-center gap-2">
+                <h4 className="text-[10px] font-black text-[#37352f] uppercase tracking-widest flex items-center gap-2">
                   <Globe className="w-3.5 h-3.5" />
                   Why is this pair {analysis.bias === 'bullish' ? 'Strong' : analysis.bias === 'bearish' ? 'Weak' : 'Neutral'}?
                 </h4>
@@ -780,11 +1002,25 @@ export default function App() {
   const [activeCategory, setActiveCategory] = useState<keyof typeof AVAILABLE_ASSETS>('Forex');
   const [selectedAnalysis, setSelectedAnalysis] = useState<PairAnalysis | null>(null);
   const [selectedInsights, setSelectedInsights] = useState<PairAnalysis | null>(null);
+  const [showProfileModal, setShowProfileModal] = useState(false);
+  const [userProfile, setUserProfile] = useState<UserProfile>(() => {
+    try {
+      const cached = localStorage.getItem('user_profile');
+      return cached ? JSON.parse(cached) : DEFAULT_PROFILE;
+    } catch (e) {
+      return DEFAULT_PROFILE;
+    }
+  });
 
   // Save to cache whenever analyses change
   useEffect(() => {
     localStorage.setItem(CACHE_KEY, JSON.stringify(analyses));
   }, [analyses]);
+
+  // Save profile to cache
+  useEffect(() => {
+    localStorage.setItem('user_profile', JSON.stringify(userProfile));
+  }, [userProfile]);
 
   const fetchPairData = async (pair: string, force = false) => {
     // Check cache first if not forcing
@@ -875,6 +1111,20 @@ export default function App() {
           
           <div className="flex items-center gap-4">
             <button 
+              onClick={() => setShowProfileModal(true)}
+              className="flex items-center gap-2 px-3 py-1.5 rounded-xl hover:bg-[#f1f1ef] transition-all group font-roboto"
+            >
+              <img 
+                src={userProfile.avatar} 
+                alt="Profile" 
+                className="w-6 h-6 rounded-full object-cover border border-[#f1f1ef]"
+                referrerPolicy="no-referrer"
+              />
+              <span className="text-[11px] font-bold text-[#37352f]">{userProfile.name}</span>
+              <Settings className="w-3.5 h-3.5 text-[#787774] group-hover:rotate-90 transition-transform duration-500" />
+            </button>
+            <div className="h-4 w-px bg-[#f1f1ef]" />
+            <button 
               onClick={() => setShowAddModal(true)}
               className="px-4 py-2 bg-black text-white text-[11px] font-bold rounded-xl border border-black hover:bg-[#37352f] transition-all flex items-center gap-2 shadow-sm"
             >
@@ -887,8 +1137,12 @@ export default function App() {
         <div className="flex-1 overflow-y-auto p-10 custom-scrollbar notebook-paper">
           <div className="max-w-7xl mx-auto">
             <div className="mb-10">
-              <TypingHeader text="Welcome ogabagt3" />
-              <p className="text-[#787774] text-sm">Real-time synthesis of global financial news and institutional sentiment.</p>
+              <TypingHeader text={`Welcome ${userProfile.name}`} />
+              <div className="flex items-center gap-3 mt-1">
+                <span className="text-[#787774] text-sm">Real-time synthesis of global financial news and institutional sentiment.</span>
+                <div className="h-3 w-px bg-[#f1f1ef]" />
+                <span className="text-[10px] font-black text-[#2383e2] uppercase tracking-widest font-roboto">{userProfile.tradingStyle} • {userProfile.experience}</span>
+              </div>
             </div>
             
             <div className="bento-grid">
@@ -954,10 +1208,10 @@ export default function App() {
                     key={category}
                     onClick={() => setActiveCategory(category)}
                     className={cn(
-                      "flex-1 py-3 text-[11px] font-bold uppercase tracking-wider transition-all border-b-2",
+                      "flex-1 py-3 text-[11px] font-black uppercase tracking-wider transition-all border-b-2",
                       activeCategory === category 
                         ? "text-[#2383e2] border-[#2383e2] bg-[#2383e2]/5" 
-                        : "text-[#787774] border-transparent hover:bg-[#f1f1ef]"
+                        : "text-[#37352f] border-transparent hover:bg-[#f1f1ef]"
                     )}
                   >
                     {category}
@@ -995,7 +1249,7 @@ export default function App() {
               </div>
               
               <div className="p-4 bg-[#f7f6f3] border-t border-[#f1f1ef]">
-                <p className="text-[10px] text-[#787774] font-medium uppercase text-center tracking-widest">
+                <p className="text-[10px] text-[#37352f] font-black uppercase text-center tracking-widest">
                   Select an asset to begin AI synthesis
                 </p>
               </div>
@@ -1019,6 +1273,19 @@ export default function App() {
           <InsightsModal 
             analysis={selectedInsights} 
             onClose={() => setSelectedInsights(null)} 
+          />
+        )}
+      </AnimatePresence>
+
+      <AnimatePresence>
+        {showProfileModal && (
+          <ProfileModal 
+            profile={userProfile}
+            onSave={(newProfile) => {
+              setUserProfile(newProfile);
+              setShowProfileModal(false);
+            }}
+            onClose={() => setShowProfileModal(false)}
           />
         )}
       </AnimatePresence>
