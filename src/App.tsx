@@ -35,7 +35,7 @@ import {
   ListTodo,
   LayoutDashboard
 } from 'lucide-react';
-import { analyzeMarket, PairAnalysis } from './services/geminiService';
+import { analyzeMarket, PairAnalysis, analyzeHeadlines, NewsHeadlineWithSentiment } from './services/geminiService';
 import { fetchRealTimePrice, fetchNewsHeadlines, PriceData, NewsHeadline } from './services/marketDataService';
 import { clsx, type ClassValue } from 'clsx';
 import { twMerge } from 'tailwind-merge';
@@ -662,18 +662,19 @@ const MarketCard = ({ analysis, pair, onRefresh, onRemove, onDetails, onInsights
 };
 
 const DetailsModal = ({ analysis, onClose }: { analysis: PairAnalysis, onClose: () => void }) => {
-  const [newsHeadlines, setNewsHeadlines] = useState<NewsHeadline[]>([]);
+  const [newsHeadlines, setNewsHeadlines] = useState<NewsHeadlineWithSentiment[]>([]);
   const [loadingNews, setLoadingNews] = useState(false);
 
   useEffect(() => {
     const loadNews = async () => {
       setLoadingNews(true);
       const headlines = await fetchNewsHeadlines(analysis.pair);
-      setNewsHeadlines(headlines);
+      const analyzedHeadlines = await analyzeHeadlines(headlines);
+      setNewsHeadlines(analyzedHeadlines);
       setLoadingNews(false);
     };
-    // Disable automatic news fetching to save API requests
-    // loadNews();
+    // Enable automatic news fetching for deep analysis
+    loadNews();
   }, [analysis.pair]);
 
   return (
@@ -783,11 +784,19 @@ const DetailsModal = ({ analysis, onClose }: { analysis: PairAnalysis, onClose: 
                               </span>
                               <span className={cn(
                                 "text-[8px] font-bold uppercase px-1.5 py-0.5 rounded border tracking-tighter",
-                                item.sentiment === 'bullish' ? "text-[#00875a] bg-[#e3fcef] border-[#00875a]/20" : 
-                                item.sentiment === 'bearish' ? "text-[#de350b] bg-[#ffebe6] border-[#de350b]/20" : 
+                                item.sentiment === 'positive' ? "text-[#00875a] bg-[#e3fcef] border-[#00875a]/20" : 
+                                item.sentiment === 'negative' ? "text-[#de350b] bg-[#ffebe6] border-[#de350b]/20" : 
                                 "text-[#787774] bg-[#f1f1ef] border-[#787774]/20"
                               )}>
                                 {item.sentiment}
+                              </span>
+                              <span className={cn(
+                                "text-[8px] font-bold uppercase px-1.5 py-0.5 rounded border tracking-tighter",
+                                item.impact === 'high' ? "text-[#2383e2] bg-[#e3f2fd] border-[#2383e2]/20" : 
+                                item.impact === 'medium' ? "text-[#787774] bg-[#f1f1ef] border-[#787774]/20" : 
+                                "text-[#787774] bg-[#f1f1ef] border-[#787774]/10"
+                              )}>
+                                {item.impact} Impact
                               </span>
                             </div>
                           </div>
@@ -844,6 +853,23 @@ const DetailsModal = ({ analysis, onClose }: { analysis: PairAnalysis, onClose: 
                             <span className="text-[9px] font-bold text-[#787774] uppercase tracking-widest">{headline.source}</span>
                             <span className="text-[9px] text-[#787774] opacity-40">•</span>
                             <span className="text-[9px] text-[#787774]">{new Date(headline.publishedAt).toLocaleDateString()}</span>
+                            <span className="text-[9px] text-[#787774] opacity-40">•</span>
+                            <span className={cn(
+                              "text-[8px] font-bold uppercase px-1.5 py-0.5 rounded border tracking-tighter",
+                              headline.sentiment === 'positive' ? "text-[#00875a] bg-[#e3fcef] border-[#00875a]/20" : 
+                              headline.sentiment === 'negative' ? "text-[#de350b] bg-[#ffebe6] border-[#de350b]/20" : 
+                              "text-[#787774] bg-[#f1f1ef] border-[#787774]/20"
+                            )}>
+                              {headline.sentiment}
+                            </span>
+                            <span className={cn(
+                              "text-[8px] font-bold uppercase px-1.5 py-0.5 rounded border tracking-tighter",
+                              headline.impact === 'high' ? "text-[#2383e2] bg-[#e3f2fd] border-[#2383e2]/20" : 
+                              headline.impact === 'medium' ? "text-[#787774] bg-[#f1f1ef] border-[#787774]/20" : 
+                              "text-[#787774] bg-[#f1f1ef] border-[#787774]/10"
+                            )}>
+                              {headline.impact} Impact
+                            </span>
                           </div>
                         </motion.a>
                       ))}
@@ -993,12 +1019,13 @@ interface Strategy {
   };
 }
 
-const ChecklistItem = ({ text, completed, onToggle, onDelete, onUpdate }: { 
+const ChecklistItem = ({ text, completed, onToggle, onDelete, onUpdate, isReminder }: { 
   text: string, 
   completed: boolean, 
   onToggle: () => void, 
   onDelete: () => void,
-  onUpdate: (newText: string) => void
+  onUpdate: (newText: string) => void,
+  isReminder?: boolean
 }) => {
   const [isEditing, setIsEditing] = useState(false);
   const [editText, setEditText] = useState(text);
@@ -1025,19 +1052,26 @@ const ChecklistItem = ({ text, completed, onToggle, onDelete, onUpdate }: {
     <div className="group relative">
       <div className={cn(
         "w-full flex items-center gap-3 p-4 rounded-xl transition-all text-left",
-        completed 
+        completed && !isReminder
           ? "bg-[#f7f6f3] text-[#787774]" 
-          : "bg-white text-[#37352f] hover:shadow-sm"
+          : "bg-white text-[#37352f] hover:shadow-sm",
+        isReminder && "bg-[#fcfcfb] border border-[#f1f1ef]/50"
       )}>
-        <button 
-          onClick={onToggle}
-          className={cn(
-            "w-5 h-5 rounded-full border flex items-center justify-center transition-all flex-shrink-0",
-            completed ? "bg-[#2383e2] border-[#2383e2]" : "bg-white border-[#f1f1ef] group-hover:border-[#2383e2]"
-          )}
-        >
-          {completed && <CheckCircle2 className="w-3.5 h-3.5 text-white" />}
-        </button>
+        {!isReminder ? (
+          <button 
+            onClick={onToggle}
+            className={cn(
+              "w-5 h-5 rounded-full border flex items-center justify-center transition-all flex-shrink-0",
+              completed ? "bg-[#2383e2] border-[#2383e2]" : "bg-white border-[#f1f1ef] group-hover:border-[#2383e2]"
+            )}
+          >
+            {completed && <CheckCircle2 className="w-3.5 h-3.5 text-white" />}
+          </button>
+        ) : (
+          <div className="w-5 h-5 flex items-center justify-center flex-shrink-0">
+            <div className="w-1.5 h-1.5 rounded-full bg-[#2383e2]" />
+          </div>
+        )}
         
         {isEditing ? (
           <input
@@ -1052,7 +1086,7 @@ const ChecklistItem = ({ text, completed, onToggle, onDelete, onUpdate }: {
         ) : (
           <span 
             onClick={() => setIsEditing(true)}
-            className={cn("text-sm font-medium pr-8 flex-1 cursor-text", completed && "line-through opacity-60")}
+            className={cn("text-sm font-medium pr-8 flex-1 cursor-text", completed && !isReminder && "line-through opacity-60")}
           >
             {text}
           </span>
@@ -1196,7 +1230,7 @@ const Checklist = () => {
   };
 
   const allItems = activeStrategy 
-    ? [...activeStrategy.categories["Trading System"], ...activeStrategy.categories["Trade Management"], ...activeStrategy.categories["Risk Management"]]
+    ? activeStrategy.categories["Trading System"]
     : [];
   const progress = allItems.length > 0 
     ? Math.round((allItems.filter(i => i.completed).length / allItems.length) * 100)
@@ -1331,6 +1365,7 @@ const Checklist = () => {
                   key={item.id} 
                   text={item.text} 
                   completed={item.completed} 
+                  isReminder={activeTab !== "Trading System"}
                   onToggle={() => toggleItem(item.id)} 
                   onDelete={() => deleteItem(item.id)}
                   onUpdate={(newText) => updateItem(item.id, newText)}

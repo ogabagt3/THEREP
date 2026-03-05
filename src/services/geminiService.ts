@@ -1,4 +1,5 @@
 import { GoogleGenAI, Type } from "@google/genai";
+import { NewsHeadline } from "./marketDataService";
 
 const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
 
@@ -8,7 +9,7 @@ export interface NewsItem {
   source: string;
   url: string;
   impact: 'high' | 'medium' | 'low';
-  sentiment: 'bullish' | 'bearish' | 'neutral';
+  sentiment: 'positive' | 'negative' | 'neutral';
 }
 
 export interface PairAnalysis {
@@ -45,7 +46,7 @@ async function callGeminiWithRetry(
   3. Current approximate 24h change percentage (use the provided data if available, otherwise estimate).
   4. 2-3 key bullet point factors driving this bias. IMPORTANT: Each factor must be very concise, maximum 2 lines of text.
   5. A brief summary.
-  6. A list of 3 key recent news items.
+  6. A list of 3 key recent news items. For each news item, analyze the sentiment as "positive", "negative", or "neutral" and its "impact" (high, medium, low).
   7. "Insights": 3-4 bullet points that simplify the fundamental jargon for a complete beginner. Explain why the pair is strong or weak in plain English, avoiding complex terms or explaining them simply.
   
   Return the data in JSON format.`;
@@ -83,7 +84,7 @@ async function callGeminiWithRetry(
                   source: { type: Type.STRING },
                   url: { type: Type.STRING },
                   impact: { type: Type.STRING, enum: ["high", "medium", "low"] },
-                  sentiment: { type: Type.STRING, enum: ["bullish", "bearish", "neutral"] }
+                  sentiment: { type: Type.STRING, enum: ["positive", "negative", "neutral"] }
                 },
                 required: ["title", "summary", "source", "impact", "sentiment"]
               }
@@ -123,5 +124,55 @@ export async function analyzeMarket(
   } catch (e) {
     console.error(`Failed to analyze market data for ${pair}:`, e);
     throw e;
+  }
+}
+
+export interface NewsHeadlineWithSentiment extends NewsHeadline {
+  sentiment: 'positive' | 'negative' | 'neutral';
+  impact: 'high' | 'medium' | 'low';
+}
+
+export async function analyzeHeadlines(headlines: NewsHeadline[]): Promise<NewsHeadlineWithSentiment[]> {
+  if (headlines.length === 0) return [];
+
+  const prompt = `Analyze the sentiment and market impact of the following financial news headlines. 
+  For each headline, provide:
+  1. Sentiment (positive, negative, or neutral)
+  2. Impact (high, medium, or low)
+  
+  Headlines:
+  ${headlines.map((h, i) => `${i + 1}. ${h.title}`).join('\n')}
+  
+  Return the results as a JSON array of objects with "sentiment" and "impact" properties, in the same order as the input.`;
+
+  try {
+    const response = await ai.models.generateContent({
+      model: "gemini-3-flash-preview",
+      contents: prompt,
+      config: {
+        responseMimeType: "application/json",
+        responseSchema: {
+          type: Type.ARRAY,
+          items: {
+            type: Type.OBJECT,
+            properties: {
+              sentiment: { type: Type.STRING, enum: ["positive", "negative", "neutral"] },
+              impact: { type: Type.STRING, enum: ["high", "medium", "low"] }
+            },
+            required: ["sentiment", "impact"]
+          }
+        }
+      }
+    });
+
+    const analysis = JSON.parse(response.text || "[]");
+    return headlines.map((h, i) => ({
+      ...h,
+      sentiment: analysis[i]?.sentiment || 'neutral',
+      impact: analysis[i]?.impact || 'low'
+    }));
+  } catch (error) {
+    console.error("Failed to analyze headlines:", error);
+    return headlines.map(h => ({ ...h, sentiment: 'neutral', impact: 'low' }));
   }
 }
